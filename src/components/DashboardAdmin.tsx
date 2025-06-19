@@ -18,6 +18,10 @@ import Rooms from '../components/Rooms.tsx';
 import ExamPeriod from '../components/ExamPeriod.tsx'; 
 import Accounts from '../components/Accounts.tsx'; 
 import Profile from '../components/Profile.tsx';
+import Scheduler_Dashboard from './Scheduler_Dashboard.tsx';
+import Scheduler_PlotSchedule from './Scheduler_PlotSchedule.tsx';
+import Scheduler_Notification from './Scheduler_Notification.tsx';
+import Scheduler_Availability from './Scheduler_Availability.tsx';
 
 const iconStyle = { className: 'icon', size: 20 };
 
@@ -178,6 +182,31 @@ const DashboardAdmin = () => {
                 </button>
               </li>
               <div className="sidebar-divider"></div>
+              <li className={activeMenu === 'scheduler' ? 'active' : ''}>
+                <button type="button" onClick={() => setActiveMenu('scheduler')}>
+                  <FaDoorOpen {...iconStyle} />
+                  {isSidebarOpen && <span>Scheduler/Staff</span>}
+                </button>
+              </li>
+              <li className={activeMenu === 'plotsched' ? 'active' : ''}>
+                <button type="button" onClick={() => setActiveMenu('plotsched')}>
+                  <FaBuilding {...iconStyle} />
+                  {isSidebarOpen && <span>Plot Schedule</span>}
+                </button>
+              </li>
+              <li className={activeMenu === 'availability' ? 'active' : ''}>
+                <button type="button" onClick={() => setActiveMenu('availability')}>
+                  <FaBuilding {...iconStyle} />
+                  {isSidebarOpen && <span>Availability</span>}
+                </button>
+              </li>
+              <li className={activeMenu === 'notification' ? 'active' : ''}>
+                <button type="button" onClick={() => setActiveMenu('notification')}>
+                  <FaBuilding {...iconStyle} />
+                  {isSidebarOpen && <span>Notification</span>}
+                </button>
+              </li>
+              <div className="sidebar-divider"></div>
               <li className={activeMenu === 'profile' ? 'active' : ''}>
                 <button type="button" onClick={() => setActiveMenu('profile')}>
                   <FaUser {...iconStyle} />
@@ -258,6 +287,10 @@ const DashboardAdmin = () => {
           {activeMenu === 'exam-period' && <ExamPeriod />}
           {activeMenu === 'accounts' && <Accounts user={user}/>}
           {activeMenu === 'profile' && <Profile />}
+          {activeMenu === 'scheduler' && <Scheduler_Dashboard />}
+          {activeMenu === 'plotsched' && <Scheduler_PlotSchedule />}
+          {activeMenu === 'availability' && <Scheduler_Availability />}
+          {activeMenu === 'notification' && <Scheduler_Notification />}
         </main>
       </div>
     </div>

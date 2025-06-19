@@ -22,7 +22,7 @@ interface Dean {
 }
 
 interface CollegesProps {
-  user: User;
+   user?: User;
 }
 
 const Colleges: React.FC<CollegesProps> = ({ user }) => {
