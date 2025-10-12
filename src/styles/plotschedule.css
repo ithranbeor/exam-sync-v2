@@ -1,0 +1,814 @@
+/* === General Container === */
+.colleges-container {
+  padding: 20px;
+  font-family: Arial, sans-serif;
+  background-color: #f5f5f5;
+  min-height: calc(100vh - 60px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 1%;
+}
+
+/* === Header === */
+.colleges-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.colleges-title {
+  font-size: 24px;
+  color: #333;
+  margin: 0;
+}
+
+/* === Search Bar === */
+.search-bar {
+  display: flex;
+  align-items: center;
+  border: 1px solid #FAB417;
+  border-radius: 5px;
+  overflow: hidden;
+  background-color: #8d6715;
+  box-shadow: 0 1px 2px rgba(205, 16, 16, 0.05);
+}
+
+.search-bar input {
+  border: none;
+  padding: 8px 10px;
+  outline: none;
+  font-size: 14px;
+  width: 250px;
+  background: transparent;
+  color: #333;
+}
+
+.search-bar .search-button {
+  border: none;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-size: 16px;
+  color: #FAB417;
+  background-color: transparent;
+}
+
+.search-bar .search-button:hover {
+  background-color: #f0f0f0;
+}
+
+/* === Actions === */
+.colleges-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.action-button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.1s ease;
+  color: white;
+  font-weight: bold;
+}
+
+.action-button:active {
+  transform: translateY(1px);
+}
+
+.action-button.add-new,
+.action-button.import,
+.action-button.save-changes {
+  background-color: #ffb800;
+}
+
+.action-button.add-new:hover,
+.action-button.import:hover,
+.action-button.save-changes:hover {
+  background-color: #e6a700;
+}
+
+/* === Table === */
+.colleges-table-container {
+  background-color: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.colleges-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: #333;
+}
+
+.colleges-table th,
+.colleges-table td {
+  padding: 12px 15px;
+  border-bottom: 1px solid #eee;
+  text-align: left;
+}
+
+.colleges-table th {
+  background-color: #333d52;
+  color: white;
+  font-weight: bold;
+}
+
+.colleges-table tbody tr:nth-child(even) {
+  background-color: #f8f8f8;
+}
+
+.colleges-table tbody tr:hover {
+  background-color: #f0f0f0;
+}
+
+/* === Icons === */
+.action-buttons {
+  display: flex;
+  gap: 5px;
+}
+
+.icon-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s ease, transform 0.1s ease;
+}
+
+.icon-button:active {
+  transform: translateY(1px);
+}
+
+.icon-button.delete-button {
+  color: #ff4d4f;
+}
+
+.icon-button.delete-button:hover {
+  color: #cc0000;
+}
+
+.icon-button.edit-button {
+  color: #1890ff;
+}
+
+.icon-button.edit-button:hover {
+  color: #0056b3;
+}
+
+.icon-button.view-button {
+  color: #28a745;
+}
+
+.icon-button.view-button:hover {
+  color: #1e7e34;
+}
+
+/* === Plot Schedule Section === */
+.plot-schedule {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 30px;
+  margin-top: 20px;
+}
+
+/* Left Side - Form */
+.plot-controls {
+  min-width: 300px;
+  height: 1000%;
+  flex: 0;
+  background-color: #fff;
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.1);
+}
+
+.plot-bondpaper {
+  min-width: 50%;
+  min-height: 1100px;
+  flex: 1;
+  background-color: #fff;
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.1);
+}
+
+.plot-controls h3 {
+  font-size: 20px;
+  margin-bottom: 20px;
+  color: #092C4C;
+}
+
+.form-group {
+  margin-bottom: 15px;
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group label {
+  font-weight: bold;
+  font-size: 14px;
+  color: #333;
+  margin-bottom: 5px;
+}
+
+.form-group select,
+.form-group input[type="date"] {
+  width: 100%;
+  padding: 7px;
+  font-size: 14px;
+  border: 2px solid #092C4C;
+  border-radius: 6px;
+  background-color: transparent;
+  color: black;
+}
+
+.form-group input[type="number"] {
+  width: 10%;
+  padding: 8px;
+  font-size: 14px;
+  border: 2px solid #092C4C;
+  border-radius: 6px;
+  background-color: transparent;
+  color: black;
+}
+
+.radio-group {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.radio-group label {
+  font-weight: normal;
+  font-size: 14px;
+}
+
+/* Duration Inputs */
+.duration-inputs {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  color: #333;
+  margin-top: 5px;
+}
+
+.duration-inputs input {
+  width: 60px;
+  text-align: center;
+  border: 2px solid #092C4C;
+}
+
+/* Right Side - Grid */
+.plot-grid {
+  flex: 2;
+  overflow-x: auto;
+}
+
+.plot-grid table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.plot-grid th,
+.plot-grid td {
+  padding: 4px;
+  border: 1px solid #ccc;
+  text-align: center;
+  min-width: 80px;
+}
+
+.plot-grid th {
+  background-color: #333d52;
+  color: white;
+}
+
+.plot-grid td:first-child {
+  background-color: #f9f9f9;
+  font-weight: bold;
+  text-align: left;
+  white-space: nowrap;
+  color: #092C4C;
+}
+
+.plot-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+.modality-details {
+  background-color: #f9f9f9;
+  padding: 15px 20px;
+  margin-top: 15px;
+  border-radius: 10px;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.1);
+}
+.modality-details h3 {
+  margin-bottom: 10px;
+  color: #092c4c;
+}
+
+.modality-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 250px; 
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.modality-item {
+  background: #fff;
+  padding: 12px;
+  border-radius: 5px;
+  border: 1px solid #e0e0e0;
+}
+
+.modality-section {
+  font-weight: bold;
+  font-size: 1.1em;
+  margin-bottom: 6px;
+  color: #333;
+}
+
+.modality-info p {
+  margin: 4px 0;
+  font-size: 0.95em;
+}
+
+.label {
+  font-weight: bold;
+  color: #555;
+  margin-right: 5px;
+}
+
+/* Optional: nice thin scrollbar */
+.modality-list::-webkit-scrollbar {
+  width: 6px;
+}
+.modality-list::-webkit-scrollbar-thumb {
+  background-color: #555;
+  border-radius: 3px;
+}
+/* Section List Styling */
+.modality-details ul {
+  list-style-type: disc;
+  padding-left: 20px;
+  margin-top: 10px;
+}
+
+.modality-details li {
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #444;
+}
+
+.modality-details li strong {
+  color: #000;
+}
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  display: flex;
+  flex-direction: column; /* Stack items vertically */
+  gap: 1.5rem; /* Space between main sections */
+  background: #ffffff; /* Keep your existing background */
+  padding: 3rem;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 720px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Container for "Send Schedule to Dean" and the Dean's name */
+.header-section {
+  display: flex;
+  align-items: center;
+  gap: 2rem; 
+}
+
+.send-schedule-text {
+  font-size: 1.2rem; 
+  font-weight: bold;
+  color: #333; 
+}
+
+.dean-info {
+  display: flex;
+  flex-direction: column; 
+  font-size: 1rem;
+  color: #555;
+}
+
+/* Container for the file input and "No file chosen" */
+.file-input-section {
+  display: flex;
+  align-items: center; /* Vertically align items in the center */
+  gap: 10px; /* Space between button and text */
+}
+
+.file-input-section input[type="file"] {
+  /* Hide the default input, we'll style the button instead */
+  display: none;
+}
+
+.custom-file-upload {
+  display: inline-block;
+  padding: 8px 15px;
+  cursor: pointer;
+  background-color: #007bff; /* Blue button */
+  color: white;
+  border: none;
+  border-radius: 5px;
+  font-size: 0.9rem;
+  transition: background-color 0.2s ease;
+}
+
+.custom-file-upload:hover {
+  background-color: #0056b3; /* Darker blue on hover */
+}
+
+.file-chosen-text {
+  font-size: 0.9rem;
+  color: #777;
+}
+
+/* Container for Cancel and Send buttons */
+.action-buttons {
+  display: flex;
+  justify-content: flex-end; /* Align buttons to the right */
+  gap: 15px; /* Space between buttons */
+  margin-top: auto; /* Push buttons to the bottom if modal content is short */
+}
+
+.action-buttons .cancel-btn,
+.action-buttons .send-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.action-buttons .cancel-btn {
+  background-color: #dc3545; /* Red for Cancel */
+  color: white;
+}
+
+.action-buttons .cancel-btn:hover {
+  background-color: #c82333;
+}
+
+.action-buttons .send-btn {
+  background-color: #28a745; /* Green for Send */
+  color: white;
+}
+
+.action-buttons .send-btn:hover {
+  background-color: #218838;
+}
+
+.profile-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #333;
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem 2rem;
+}
+
+.details-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.details-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.details-value {
+  font-size: 1rem;
+  color: #222;
+  margin-top: 0.2rem;
+  word-break: break-word;
+}
+
+.close-button {
+  margin-top: 2rem;
+  padding: 0.6rem 1.2rem;
+  background: #d32f2f;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  display: block;
+  margin-left: auto;
+  transition: background 0.3s ease;
+}
+
+.close-button:hover {
+  background: #b71c1c;
+}
+.custom-select {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  background-color: transparent;
+  font-size: 12px;
+  color: #333;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  transition: border-color 0.2s ease;
+  width: 55%;
+} 
+
+.custom-select:hover {
+  border-color: #888;
+}
+
+.custom-select:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
+}
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdown-toggle {
+  cursor: pointer;
+  position: relative;
+}
+
+.dropdown-menu {
+  display: none;
+  position: absolute;
+  right: 0;
+  background-color: #fff;
+  min-width: 160px;
+  box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  padding: 8px 0;
+  border-radius: 8px;
+}
+
+.dropdown-item {
+  padding: 10px 16px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.dropdown-item:hover {
+  background-color: #f1f1f1;
+}
+
+/* Show the dropdown on toggle click */
+.dropdown:hover .dropdown-menu {
+  display: block;
+}
+.pagination-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem; /* spacing between buttons */
+  margin-top: 1.5rem;
+}
+
+.pagination-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.75rem;
+  background-color: transparent;
+  color: #333333;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+  border: none;
+}
+
+.pagination-btn:hover {
+  background-color: transparent;
+  transform: translateY(-1px);
+}
+
+.pagination-btn.disabled {
+  background-color: transparent;
+  color: #9ca3af;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.pagination-info {
+  font-weight: 500;
+  color: #374151;
+}
+
+.icon {
+  font-size: 14px;
+}
+/* examSchedule.css */
+.page-break {
+  page-break-before: always;
+}
+button.btn.btn-primary {
+    background: #ffb800;
+    border: none;
+    color: white;
+    font-size: small;
+}
+button.btn.btn-success {
+    background: rgb(5, 102, 5);
+    border: none;
+    color: white;
+    font-size: small;
+    margin-left: 5px;
+}
+.back-button {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: transparent;
+  border: none;
+  color: #2c3e50;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 1px;
+  transition: color 0.2s ease;
+}
+
+.back-button:hover {
+  color: #ffb800;
+}
+
+.footer-actions {
+  margin-top: auto; /* pushes footer down */
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-top: 1px solid #ddd;
+}
+
+/* Generate button bigger */
+.btn-generate {
+  background: none;
+  border: none;
+  color: #ffb800;
+  font-size: 60px;
+  cursor: pointer;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.btn-generate:hover {
+  transform: scale(1.15);
+  color: #e0a800;
+}
+
+/* Small icon buttons lined horizontally */
+.footer-icon-buttons {
+  display: flex;
+  gap: 37px; /* spacing between buttons */
+  align-items: center;
+}
+
+.btn-icon-only {
+  background: none;
+  border: none;
+  font-size: 28px;
+  color: #555;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  transition: transform 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.btn-icon-only:hover {
+  transform: scale(1.2);
+  color: #ffb800;
+  background-color:transparent;
+}
+
+/* Tooltips */
+.tooltip .tooltip-text {
+  visibility: hidden;
+  width: max-content;
+  background-color: rgba(50, 50, 50, 0.9);
+  color: #fff;
+  text-align: center;
+  padding: 6px 10px;
+  border-radius: 6px;
+  position: absolute;
+  z-index: 100;
+  bottom: -34%;
+  left: 50%;
+  transform: translateX(-50%);
+  opacity: 0;
+  font-size: 10px;
+  white-space: nowrap;
+  transition: all 0.25s ease;
+}
+
+.tooltip:hover .tooltip-text {
+  visibility: visible;
+  opacity: 1;
+}
+button.btn-generate.tooltip {
+    padding: revert;
+}
+/* Dropdown container */
+.dropdown-menu-reassign {
+  position: absolute;
+  top: 110%; /* slightly below the button */
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  z-index: 100;
+}
+
+/* Button styling inside dropdown */
+.dropdown-menu-reassign .btn-icon-only {
+  font-size: 24px;
+  color: #555;
+  padding: 6px 10px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.2s, color 0.2s;
+}
+
+.dropdown-menu-reassign .btn-icon-only:hover {
+  transform: scale(1.1);
+  color: #ffb800;
+}
+
+/* Optional tooltip inside dropdown */
+.dropdown-menu-reassign .tooltip-text {
+  display: none; /* can hide tooltips if unnecessary */
+}
+/* Only avoid breaking inside the outer page wrapper */
+.pdf-page {
+  page-break-inside: avoid;
+  break-inside: avoid;
+  /* optional spacing */
+  padding: 6mm;
+  box-sizing: border-box;
+  justify-content: flex-start;
+}
+
+.page-break {
+  page-break-after: always;
+  break-after: page;
+}
+
+.time-box {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}

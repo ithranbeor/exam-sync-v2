@@ -1,0 +1,196 @@
+/* adminColleges.css */
+
+.admin-colleges-container {
+  padding: 20px;
+  background-color: var(--light-gray-bg); 
+  min-height: calc(100vh - 40px); 
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.admin-header h2 {
+  margin: 0;
+  color: var(--text-color);
+  font-size: 1.8rem;
+}
+
+.search-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  overflow: hidden;
+  background-color: var(--card-bg);
+  box-shadow: var(--shadow); 
+}
+
+.search-bar input {
+  border: none;
+  padding: 10px 15px;
+  padding-right: 40px; 
+  font-size: 1rem;
+  outline: none;
+  flex-grow: 1;
+}
+
+.search-icon {
+  position: absolute;
+  right: 15px;
+  color: var(--light-text-color);
+}
+
+.action-buttons {
+  margin-bottom: 20px;
+  display: flex;
+  gap: 15px;
+}
+
+.add-new-button,
+.import-button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: bold;
+  transition: background-color 0.2s ease;
+}
+
+.add-new-button {
+  background-color: #F2994A; 
+  color: white;
+}
+
+.add-new-button:hover {
+  background-color: #e08c3e;
+}
+
+.import-button {
+  background-color: #FAB417; 
+  color: white;
+}
+
+.import-button:hover {
+  background-color: #e3a00c; 
+}
+
+.colleges-table-container {
+  flex-grow: 1; 
+  overflow-x: auto; 
+  background-color: var(--card-bg);
+  border-radius: 15px; 
+  box-shadow: var(--shadow);
+  padding: 15px; 
+}
+
+.colleges-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.colleges-table th,
+.colleges-table td {
+  padding: 12px 15px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-color);
+}
+
+.colleges-table th {
+  background-color: #092C4C; 
+  color: white;
+  font-weight: bold;
+  position: sticky; 
+  top: 0;
+  z-index: 1;
+}
+
+.colleges-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.action-buttons-cell {
+  display: flex;
+  gap: 10px;
+}
+
+.icon-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 5px;
+  font-size: 1.1rem;
+  transition: color 0.2s ease;
+}
+
+.edit-button {
+  color: #1e90ff;
+}
+
+.edit-button:hover {
+  color: #0056b3;
+}
+
+.delete-button {
+  color: #dc3545; 
+}
+
+.delete-button:hover {
+  color: #b02a37;
+}
+
+.save-changes-footer {
+  display: flex;
+  justify-content: flex-end; 
+  margin-top: 20px;
+  padding-right: 15px; 
+  padding-bottom: 15px;
+}
+
+.save-changes-button {
+  padding: 10px 25px;
+  background-color: #FAB417; 
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: bold;
+  transition: background-color 0.2s ease;
+  box-shadow: var(--shadow);
+}
+
+.save-changes-button:hover {
+  background-color: #e3a00c;
+}
+
+/* Responsive adjustments for the table */
+@media (max-width: 768px) {
+  .admin-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .search-bar {
+    width: 100%;
+    margin-top: 15px;
+  }
+  .action-buttons {
+    flex-direction: column;
+    width: 100%;
+  }
+  .add-new-button,
+  .import-button {
+    width: 100%;
+  }
+  .colleges-table-container {
+    padding: 10px;
+  }
+}
