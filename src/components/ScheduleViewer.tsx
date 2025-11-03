@@ -15,7 +15,17 @@ interface ExamDetail {examdetails_id?: number;  course_id: string;      section_
                       proctor_timeout?: string; program_id?: string;    college_name?: string; modality_id?: number;    exam_period?: string;   exam_category?: string; 
                      }
 
-const SchedulerView: React.FC = () => {
+interface SchedulerViewProps {
+  user: {
+    user_id: number;
+    email_address: string;
+    first_name?: string;
+    last_name?: string;
+    middle_name?: string;
+  } | null;
+}
+
+const SchedulerView: React.FC<SchedulerViewProps> = ({ user }) => {
   const [examData, setExamData] = useState<ExamDetail[]>([]);
   const [users, setUsers] = useState<{ user_id: number; first_name: string; last_name: string }[]>([]);
   const [page, setPage] = useState(0);
@@ -259,13 +269,13 @@ const SchedulerView: React.FC = () => {
     }
 
     // First confirmation
-    const confirmStep1 = window.confirm(
+    const confirmStep1 = globalThis.confirm(
       `⚠️ WARNING: You are about to delete ALL schedules for ${collegeName}.\n\nAre you absolutely sure you want to continue?`
     );
     if (!confirmStep1) return;
 
     // Second confirmation
-    const confirmStep2 = window.confirm(
+    const confirmStep2 = globalThis.confirm(
       `🚨 FINAL CONFIRMATION:\n\nThis will permanently remove ALL exam schedules for ${collegeName}.\nThis action cannot be undone.\n\nDo you still want to proceed?`
     );
     if (!confirmStep2) return;
@@ -423,7 +433,7 @@ const SchedulerView: React.FC = () => {
               boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
               borderRadius: 12,
               background: "#f9f9f9",
-              margin: "0 10px",
+              margin: "16px 50px",
               padding: 15,
             }}
           >
@@ -496,8 +506,11 @@ const SchedulerView: React.FC = () => {
                     boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
                     borderRadius: 12,
                     background: "#f9f9f9",
-                    margin: "0 10px",
+                    margin: "16px 50px",
                     padding: 15,
+                    transform: "scale(0.9)",          // zoom out (0.9 = 90% size)
+                    transformOrigin: "top center",    // adjust where the zoom happens from
+                    transition: "transform 0.3s ease" // smooth transition if it changes dynamically
                   }}
                 >
                   <div className="scheduler-view-container">
@@ -695,8 +708,11 @@ const SchedulerView: React.FC = () => {
                     boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
                     borderRadius: 12,
                     background: "#f9f9f9",
-                    margin: "0 10px",
+                    margin: "16px 50px",
                     padding: 15,
+                    transform: "scale(0.9)",          // zoom out (0.9 = 90% size)
+                    transformOrigin: "top center",    // adjust where the zoom happens from
+                    transition: "transform 0.3s ease" // smooth transition if it changes dynamically
                   }}
                 >
                   <div className="scheduler-view-container">
@@ -861,10 +877,10 @@ const SchedulerView: React.FC = () => {
           })()
         )}
         <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-          <AddScheduleForm />
+          <AddScheduleForm user={user} />
         </Modal>
       </div>
-      <ToastContainer position="top-right" autoClose={3000} />
+      <ToastContainer position="top-right" autoClose={15000} />
     </div>
   );
 };

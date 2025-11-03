@@ -3,7 +3,7 @@ import React, { JSX, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient.ts';
 import {
-  FaHome, FaCalendar, FaClock, FaClipboardList, FaBell, FaUser, FaSignOutAlt, FaBuilding, FaPenAlt, FaCalendarPlus, FaUsers, FaInbox
+  FaHome, FaCalendar, FaClock, FaClipboardList, FaBell, FaUser, FaSignOutAlt, FaBuilding, FaPenAlt, FaCalendarPlus, FaUsers
 } from 'react-icons/fa';
 import { BsFillSendPlusFill } from "react-icons/bs";
 import '../styles/dashboardFaculty.css';
@@ -17,7 +17,7 @@ import BayanihanModality from "./BayanihanModality.tsx";
 import SchedulerPlotSchedule from "./ScheduleViewer.tsx";
 import SchedulerAvailability from "./SchedulerAvailability.tsx";
 import DeanRequests from "./DeanRequests.tsx";    
-import Inbox from "./facultyInbox.tsx";
+import _Inbox from "./facultyInbox.tsx";
 import RoomManagement from './RoomManagement.tsx';
 
 const iconStyle = { className: 'icon', size: 20 };
@@ -28,7 +28,6 @@ const roleSidebarMap: Record<string, { key: string, label: string, icon: JSX.Ele
     { key: 'set-Availability', label: 'Set Availability', icon: <FaClock {...iconStyle} /> },
     { key: 'exam-Schedule', label: 'View Exam Schedule', icon: <FaClipboardList {...iconStyle} /> },
     { key: 'notification', label: 'Notification', icon: <FaBell {...iconStyle} /> },
-    { key: 'inbox', label: 'Inbox', icon: <FaInbox {...iconStyle} /> },
   ],
   scheduler: [
     { key: 'exam-Date', label: 'Exam Date', icon: <FaCalendar {...iconStyle} /> },
@@ -36,21 +35,18 @@ const roleSidebarMap: Record<string, { key: string, label: string, icon: JSX.Ele
     { key: 'exam-Schedule', label: 'View Exam Schedule', icon: <FaClipboardList {...iconStyle} /> },
     { key: 'proctors-Availability', label: 'Available Proctor', icon: <FaUsers {...iconStyle} /> },
     { key: 'notification', label: 'Notification', icon: <FaBell {...iconStyle} /> },
-    { key: 'inbox', label: 'Inbox', icon: <FaInbox {...iconStyle} /> },
     { key: 'Room-Management', label: 'Room Management', icon: <FaBuilding {...iconStyle} /> },
   ],
   dean: [
     { key: 'exam-Date', label: 'Exam Date', icon: <FaCalendar {...iconStyle} /> },
     { key: 'notification', label: 'Notification', icon: <FaBell {...iconStyle} /> },
     { key: 'Request', label: 'Requests', icon: <BsFillSendPlusFill {...iconStyle} /> },
-    { key: 'inbox', label: 'Inbox', icon: <FaInbox {...iconStyle} /> },
   ],
   'bayanihan leader': [
     { key: 'exam-Date', label: 'Exam Date', icon: <FaCalendar {...iconStyle} /> },
     { key: 'set-Modality', label: 'Set Modality', icon: <FaPenAlt {...iconStyle} /> },
     { key: 'exam-Schedule', label: 'View Exam Schedule', icon: <FaClipboardList {...iconStyle} /> },
     { key: 'notification', label: 'Notification', icon: <FaBell {...iconStyle} /> },
-    { key: 'inbox', label: 'Inbox', icon: <FaInbox {...iconStyle} /> },
   ]
 };
 
@@ -314,11 +310,10 @@ const DashboardFaculty = () => {
           {activeMenu === 'exam-Schedule' && <ProctorViewExam />}
           {activeMenu === 'notification' && <Notification />}
           {activeMenu === 'set-Modality' && <BayanihanModality user={user} />}
-          {activeMenu === 'plot-Schedule' && <SchedulerPlotSchedule/>}
+          {activeMenu === 'plot-Schedule' && <SchedulerPlotSchedule user={user}/>}
           {activeMenu === 'proctors-Availability' && <SchedulerAvailability user={user}/>}
-          {activeMenu === 'inbox' && <Inbox user={user}/>}
           {activeMenu === 'Request' && <DeanRequests/>}
-          {activeMenu === 'Room-Management' && <RoomManagement/>}
+          {activeMenu === 'Room-Management' && <RoomManagement user={user}/>}
         </main>
       </div>
     </div>

@@ -38,8 +38,10 @@ const BayanihanModality: React.FC<UserProps> = ({ user }) => {
   const [courseOptions, setCourseOptions] = useState<{ course_id: string; course_name: string }[]>([]);
   const [sectionOptions, setSectionOptions] = useState<{ course_id: string; program_id: string; section_name: string }[]>([]);
   const [roomOptions, setRoomOptions] = useState<{ room_id: string; room_name: string; room_type: string; building_id?: string }[]>([]);
+  const [availableRoomIds, setAvailableRoomIds] = useState<string[]>([]);
   const [_sectionDropdownOpen, _setSectionDropdownOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false); // add this at the top with other state
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loadingRooms, setLoadingRooms] = useState(true);
 
   const _dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -57,19 +59,17 @@ const BayanihanModality: React.FC<UserProps> = ({ user }) => {
     [key: string]: { occupiedTimes: { start: string; end: string }[] }
   }>({});
 
-    const CheckboxOption = (props: any) => {
-    return (
-      <components.Option {...props}>
-        <input
-          type="checkbox"
-          checked={props.isSelected}
-          readOnly
-          style={{ marginRight: 8 }}
-        />
-        {props.label}
-      </components.Option>
-    );
-  };
+  const CheckboxOption = (props: any) => (
+    <components.Option {...props}>
+      <input
+        type="checkbox"
+        checked={props.isSelected}
+        readOnly
+        style={{ marginRight: 8 }}
+      />
+      <label>{props.label}</label>
+    </components.Option>
+  );
 
   /** FETCH ROOM STATUS BASED ON EXAMDETAILS */
   useEffect(() => {
@@ -98,67 +98,153 @@ const BayanihanModality: React.FC<UserProps> = ({ user }) => {
     fetchRoomStatus();
   }, []);
 
-  /** FETCH PROGRAMS, COURSES, SECTIONS, ROOMS, BUILDINGS BASED ON USER */
+  /** FETCH PROGRAMS, COURSES, SECTIONS, ROOMS, BUILDINGS, AND AVAILABLE ROOMS */
   useEffect(() => {
     const fetchData = async () => {
       if (!user?.user_id) return;
 
-      // USER ROLES
-      const { data: roles } = await supabase
-        .from('tbl_user_role')
-        .select('college_id, department_id')
-        .eq('user_id', user.user_id);
+      setLoadingRooms(true);
 
-      if (!roles || roles.length === 0) return;
+      try {
+        // USER ROLES
+        const { data: roles } = await supabase
+          .from('tbl_user_role')
+          .select('college_id, department_id')
+          .eq('user_id', user.user_id);
 
-      const leaderDepartments = roles.map(r => r.department_id).filter(Boolean);
-      if (!leaderDepartments.length) return;
+        if (!roles || roles.length === 0) {
+          setLoadingRooms(false);
+          return;
+        }
 
-      // PROGRAMS
-      const { data: programs } = await supabase
-        .from('tbl_program')
-        .select('program_id, program_name, department_id')
-        .in('department_id', leaderDepartments);
+        const leaderDepartments = roles.map(r => r.department_id).filter(Boolean);
+        if (!leaderDepartments.length) {
+          setLoadingRooms(false);
+          return;
+        }
 
-      setProgramOptions(programs ?? []);
+        // PROGRAMS
+        const { data: programs } = await supabase
+          .from('tbl_program')
+          .select('program_id, program_name, department_id')
+          .in('department_id', leaderDepartments);
 
-      // USER COURSES
-      const { data: userCourses } = await supabase
-        .from('tbl_course_users')
-        .select('course_id')
-        .eq('user_id', user.user_id)
-        .eq('is_bayanihan_leader', true);
+        setProgramOptions(programs ?? []);
 
-      const courseIds = userCourses?.map(c => c.course_id) ?? [];
+        // USER COURSES
+        const { data: userCourses } = await supabase
+          .from('tbl_course_users')
+          .select('course_id')
+          .eq('user_id', user.user_id)
+          .eq('is_bayanihan_leader', true);
 
-      const { data: coursesWithNames } = await supabase
-        .from('tbl_course')
-        .select('course_id, course_name')
-        .in('course_id', courseIds);
+        const courseIds = userCourses?.map(c => c.course_id) ?? [];
 
-      setCourseOptions(coursesWithNames ?? []);
+        const { data: coursesWithNames } = await supabase
+          .from('tbl_course')
+          .select('course_id, course_name')
+          .in('course_id', courseIds);
 
-      // SECTIONS
-      const { data: sectionCourses } = await supabase
-        .from('tbl_sectioncourse')
-        .select('course_id, program_id, section_name');
+        setCourseOptions(coursesWithNames ?? []);
 
-      const filteredSections = sectionCourses?.filter(sc => courseIds.includes(sc.course_id)) ?? [];
-      setSectionOptions(filteredSections);
+        // SECTIONS
+        const { data: sectionCourses } = await supabase
+          .from('tbl_sectioncourse')
+          .select('course_id, program_id, section_name');
 
-      // ROOMS
-      const { data: rooms } = await supabase
-        .from('tbl_rooms')
-        .select('room_id, room_name, room_type, building_id');
+        const filteredSections = sectionCourses?.filter(sc => courseIds.includes(sc.course_id)) ?? [];
+        setSectionOptions(filteredSections);
 
-      setRoomOptions(rooms ?? []);
+        // FETCH AVAILABLE ROOMS (rooms marked as available in RoomManagement)
+        /** Get user's college based on role_id = 4 (Bayanihan Leader) **/
+        const { data: leaderRoles, error: roleErr } = await supabase
+          .from('tbl_user_role')
+          .select('department_id, role_id')
+          .eq('user_id', user.user_id)
+          .eq('role_id', 4); // Bayanihan Leader
 
-      // BUILDINGS
-      const { data: buildings } = await supabase
-        .from('tbl_buildings')
-        .select('building_id, building_name');
+        if (roleErr) {
+          console.error('Error fetching user role:', roleErr.message);
+          toast.error('Unable to fetch your department information.');
+          setLoadingRooms(false);
+          return;
+        }
 
-      setBuildingOptions(buildings?.map(b => ({ id: b.building_id, name: b.building_name })) ?? []);
+        if (!leaderRoles || leaderRoles.length === 0) {
+          toast.warn('You are not assigned as a Bayanihan Leader.');
+          setLoadingRooms(false);
+          return;
+        }
+
+        const leaderDepartmentIds = leaderRoles.map(r => r.department_id).filter(Boolean);
+        if (leaderDepartmentIds.length === 0) {
+          toast.warn('No department assigned to your Bayanihan Leader role.');
+          setLoadingRooms(false);
+          return;
+        }
+
+        /** Get the college that these departments belong to **/
+        const { data: departments, error: deptErr } = await supabase
+          .from('tbl_department')
+          .select('department_id, college_id')
+          .in('department_id', leaderDepartmentIds);
+
+        if (deptErr) {
+          console.error('Error fetching departments:', deptErr.message);
+          toast.error('Failed to fetch department-college mapping.');
+          setLoadingRooms(false);
+          return;
+        }
+
+        const collegeIds = departments.map(d => d.college_id).filter(Boolean);
+        if (collegeIds.length === 0) {
+          toast.warn('No associated college found for your department.');
+          setLoadingRooms(false);
+          return;
+        }
+
+        /** Fetch available rooms filtered by those college IDs **/
+        const { data: availableRooms, error: availableError } = await supabase
+          .from('tbl_available_rooms')
+          .select('room_id, college_id')
+          .in('college_id', collegeIds);
+
+        if (availableError) {
+          console.error('Error fetching available rooms:', availableError.message);
+          toast.error(`Failed to load available rooms: ${availableError.message}`);
+          setLoadingRooms(false);
+          return;
+        }
+
+        const availableIds = availableRooms?.map(r => r.room_id) ?? [];
+        setAvailableRoomIds(availableIds);
+
+        /** Fetch room details based on available IDs **/
+        if (availableIds.length > 0) {
+          const { data: rooms } = await supabase
+            .from('tbl_rooms')
+            .select('room_id, room_name, room_type, building_id')
+            .in('room_id', availableIds);
+          setRoomOptions(rooms ?? []);
+        } else {
+          setRoomOptions([]);
+        }
+
+        // BUILDINGS
+        const { data: buildings } = await supabase
+          .from('tbl_buildings')
+          .select('building_id, building_name');
+
+        setBuildingOptions(buildings?.map(b => ({ id: b.building_id, name: b.building_name })) ?? []);
+
+        console.log('Available Room IDs:', availableIds);
+        console.log('Filtered Rooms:', roomOptions);
+      } catch (error) {
+        console.error('Unexpected error fetching data:', error);
+        toast.error('An unexpected error occurred while loading data');
+      } finally {
+        setLoadingRooms(false);
+      }
     };
 
     fetchData();
@@ -190,14 +276,20 @@ const BayanihanModality: React.FC<UserProps> = ({ user }) => {
   /** HANDLE FORM SUBMIT */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSubmitting) return; // prevent double submit
+    if (isSubmitting) return;
     if (!user?.user_id) return;
+    
     if (!form.sections.length) {
       toast.warn('Please select at least one section.');
       return;
     }
 
-    setIsSubmitting(true); // start loading
+    if (form.sections.length !== form.rooms.length) {
+      toast.error(`Number of sections must be equal to the number of rooms! (${form.sections.length} of ${form.rooms.length} selected)`);
+      return;
+    }
+
+    setIsSubmitting(true);
 
     for (const sectionName of form.sections) {
       const section = sectionOptions.find(
@@ -244,7 +336,7 @@ const BayanihanModality: React.FC<UserProps> = ({ user }) => {
       else toast.success(`Saved for ${section.section_name}`);
     }
 
-    setIsSubmitting(false); // end loading
+    setIsSubmitting(false);
 
     // Reset form after submit
     setForm({
@@ -261,9 +353,9 @@ const BayanihanModality: React.FC<UserProps> = ({ user }) => {
   /** GET ROOM TIMESLOTS WITH 30-MINUTE VACANT INTERVALS */
   const getRoomTimeslots = (roomId: string) => {
     const dayStart = new Date();
-    dayStart.setHours(7, 30, 0, 0); // 07:30 AM
+    dayStart.setHours(7, 30, 0, 0);
     const dayEnd = new Date();
-    dayEnd.setHours(21, 0, 0, 0); // 09:00 PM
+    dayEnd.setHours(21, 0, 0, 0);
 
     const status = roomStatus[String(roomId)];
     const occupiedTimes =
@@ -275,7 +367,6 @@ const BayanihanModality: React.FC<UserProps> = ({ user }) => {
     let cursor = new Date(dayStart);
 
     for (const slot of occupiedTimes) {
-      // Add one vacant block from cursor → slot.start
       if (cursor.getTime() < slot.start.getTime()) {
         timeslots.push({
           start: new Date(cursor),
@@ -284,18 +375,15 @@ const BayanihanModality: React.FC<UserProps> = ({ user }) => {
         });
       }
 
-      // Add the occupied slot itself
       timeslots.push({
         start: new Date(slot.start),
         end: new Date(slot.end),
         occupied: true,
       });
 
-      // Move cursor forward
       cursor = new Date(slot.end);
     }
 
-    // Add final vacant block from last occupied slot → end of day
     if (cursor.getTime() < dayEnd.getTime()) {
       timeslots.push({
         start: new Date(cursor),
@@ -331,12 +419,41 @@ const BayanihanModality: React.FC<UserProps> = ({ user }) => {
     );
   };
 
+  // Filter rooms to only show available ones
+  const filteredRoomOptions = roomOptions.filter(r => availableRoomIds.includes(r.room_id));
+
   return (
     <div className="set-availability-container">
       <div className="availability-sections">
         <div className="availability-card">
           <div className="card-header-set">Modality Submission</div>
           <p className="subtitle">Please fill in all fields before submitting.</p>
+          
+          {loadingRooms ? (
+            <div style={{ 
+              backgroundColor: '#e3f2fd', 
+              border: '1px solid #2196F3', 
+              padding: '12px', 
+              borderRadius: '4px', 
+              marginBottom: '20px',
+              color: '#1565C0',
+              textAlign: 'center'
+            }}>
+              Loading available rooms...
+            </div>
+          ) : availableRoomIds.length === 0 ? (
+            <div style={{ 
+              backgroundColor: '#fff3cd', 
+              border: '1px solid #ffc107', 
+              padding: '12px', 
+              borderRadius: '4px', 
+              marginBottom: '20px',
+              color: '#856404'
+            }}>
+              ⚠️ No rooms are currently available for selection. Please contact the administrator to set up available rooms in the Room Management page.
+            </div>
+          ) : null}
+
           <form className="availability-form" onSubmit={handleSubmit}>
             <div className="availability-grid">
 
@@ -364,13 +481,12 @@ const BayanihanModality: React.FC<UserProps> = ({ user }) => {
                 <button
                   type="button"
                   className="open-modal-btn"
-                  disabled={!form.roomType || form.roomType === "No Room"} // 🚫 disabled until modality is chosen
+                  disabled={!form.roomType || form.roomType === "No Room" || availableRoomIds.length === 0 || loadingRooms}
                   onClick={() => setShowRoomModal(true)}
                 >
-                  Select Room
+                  {loadingRooms ? 'Loading...' : 'Select Room'}
                 </button>
 
-                {/* Show selected rooms */}
                 {form.rooms.length > 0 && (
                   <div className="selected-rooms">
                     {form.rooms.map((roomId) => {
@@ -448,19 +564,31 @@ const BayanihanModality: React.FC<UserProps> = ({ user }) => {
                         return;
                       }
 
-                      const allSectionNames = sectionOptions
+                      const allSections = sectionOptions
                         .filter(s => s.course_id === form.course)
                         .map(s => s.section_name);
 
-                      const selectAllClicked = selected.find(s => s.value === 'select_all');
+                      const isSelectAll = selected.some(s => s.value === 'select_all');
 
-                      if (selectAllClicked) {
-                        // If select all clicked, select all sections
-                        setForm(prev => ({ ...prev, sections: allSectionNames }));
-                      } else {
-                        const selectedSections = selected.map(s => s.value);
-                        setForm(prev => ({ ...prev, sections: selectedSections }));
+                      if (isSelectAll) {
+                        if (form.rooms.length === 0) {
+                          toast.warn('Please select rooms first before using "Select All".');
+                          return;
+                        }
+
+                        const limitedSections = allSections.slice(0, form.rooms.length);
+                        setForm(prev => ({ ...prev, sections: limitedSections }));
+                        toast.info(`Only ${form.rooms.length} section(s) selected.`);
+                        return;
                       }
+
+                      const selectedValues = selected.map(s => s.value);
+                      if (selectedValues.length > form.rooms.length) {
+                        toast.error(`You can only select ${form.rooms.length} section(s) because ${form.rooms.length} room(s) are selected.`);
+                        return;
+                      }
+
+                      setForm(prev => ({ ...prev, sections: selectedValues }));
                     }}
                     placeholder="Select sections..."
                   />
@@ -468,13 +596,13 @@ const BayanihanModality: React.FC<UserProps> = ({ user }) => {
                   <p style={{ color: "#888" }}>Select a course first</p>
                 )}
 
-                {/* Counter */}
                 {form.rooms.length > 0 && (
-                  <small style={{ marginTop: "4px", display: "block", color: "#666" }}>
-                    ⚠️ Number of sections must equal number of rooms! {form.sections.length} of {form.rooms.length} section(s) selected.
+                  <small style={{ marginTop: "4px", display: "block", color: form.sections.length !== form.rooms.length ? "red" : "#666" }}>
+                    ⚠️ Number of sections must be equal to the number of rooms! {form.sections.length} of {form.rooms.length} section(s) selected.
                   </small>
                 )}
               </div>
+
               {/* REMARKS */}
               <div className="form-group">
                 <label>Remarks</label>
@@ -490,7 +618,7 @@ const BayanihanModality: React.FC<UserProps> = ({ user }) => {
 
             <button type="submit" className="submit-button" disabled={isSubmitting}>
               {isSubmitting ? (
-                <span className="spinner"></span> // you can style this with CSS
+                <span className="spinner"></span>
               ) : (
                 'Submit'
               )}
@@ -521,7 +649,7 @@ const BayanihanModality: React.FC<UserProps> = ({ user }) => {
             />
 
             <div className="room-grid">
-              {roomOptions
+              {filteredRoomOptions
                 .filter(r => !selectedBuilding || r.building_id === selectedBuilding)
                 .sort((a, b) => {
                   if (a.room_type === form.roomType && b.room_type !== form.roomType) return -1;
@@ -566,9 +694,8 @@ const BayanihanModality: React.FC<UserProps> = ({ user }) => {
                   );
                 })}
 
-              {/* ✅ Show message if no rooms match */}
-              {roomOptions.filter(r => !selectedBuilding || r.building_id === selectedBuilding).length === 0 && (
-                <div className="no-rooms">No rooms available</div>
+              {filteredRoomOptions.filter(r => !selectedBuilding || r.building_id === selectedBuilding).length === 0 && (
+                <div className="no-rooms">No available rooms for this room type</div>
               )}
             </div>
 

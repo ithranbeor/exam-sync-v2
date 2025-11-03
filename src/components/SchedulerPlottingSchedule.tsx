@@ -4,6 +4,8 @@ import { supabase } from "../lib/supabaseClient.ts";
 import "../styles/SchedulerPlottingSchedule.css";
 import Select, { components } from "react-select";
 import { FaPlay, FaSpinner } from "react-icons/fa";
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 interface ExamDetail {
   examdetails_id?: number;
@@ -28,7 +30,14 @@ interface ExamDetail {
   instructor_id?: number | null;
 }
 
-const SchedulerPlottingSchedule: React.FC = () => {
+interface SchedulerProps {
+  user: {
+    user_id: number;
+    email_address: string;
+  } | null;
+}
+
+const SchedulerPlottingSchedule: React.FC<SchedulerProps> = ({ user }) => {
   const [formData, setFormData] = useState<ExamDetail & {
     selectedPrograms: string[];
     selectedCourses: string[];
@@ -80,69 +89,158 @@ const SchedulerPlottingSchedule: React.FC = () => {
 
   useEffect(() => {
     const fetchAll = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      try {
+        const realUserId = user?.user_id;
+        if (!realUserId) {
+          console.warn("No user prop found — cannot fetch user-specific data.");
+          return;
+        }
 
-      const { data: userRow } = await supabase
-        .from("tbl_users")
-        .select("user_id")
-        .eq("user_uuid", user?.id)
-        .single();
+        console.log("Using user_id from props:", realUserId);
 
-      const realUserId = userRow?.user_id;
+        // ✅ STEP 1: Fetch colleges first
+        const { data: allColleges, error: collegesError } = await supabase
+          .from("tbl_college")
+          .select("college_id, college_name");
+        
+        if (collegesError) {
+          console.error("Error fetching colleges:", collegesError);
+        }
 
-      const [
-        { data: periods },
-        { data: mods },
-        { data: progs },
-        { data: crs },
-        { data: trms },
-        { data: sectCourses },
-        { data: userRoles },
-        { data: depts },
-        { data: rooms },
-        { data: buildings },
-        { data: colleges },
-      ] = await Promise.all([
-        supabase.from("tbl_examperiod").select("*"),
-        supabase.from("tbl_modality").select("*"),
-        supabase.from("tbl_program").select("*"),
-        supabase.from("tbl_course").select("*"),
-        supabase.from("tbl_term").select("*"),
-        supabase.from("tbl_sectioncourse").select("*"),
-        supabase
+        const colleges = allColleges || [];
+        setCollegesCache(colleges);
+        console.log("Colleges loaded:", colleges.length);
+
+        // ✅ STEP 2: Get user roles (specifically role_id = 3 for Scheduler)
+        const { data: userRoles, error: rolesError } = await supabase
           .from("tbl_user_role")
-          .select("college_id")
+          .select("college_id, role_id")
           .eq("user_id", realUserId)
-          .eq("role_id", 3),
-        supabase.from("tbl_department").select("department_id, college_id"),
-        supabase.from("tbl_rooms").select("room_id, building_id, room_capacity"),
-        supabase.from("tbl_buildings").select("building_id, building_name"),
-        supabase.from("tbl_college").select("college_id, college_name"),
-      ]);
+          .eq("role_id", 3);
 
-      if (periods) setExamPeriods(periods);
-      if (mods) setModalities(mods);
-      if (progs) setPrograms(progs);
-      if (crs) setCourses(crs);
-      if (trms) setTerms(trms);
-      if (sectCourses) setSectionCourses(sectCourses);
-      if (depts) setDepartments(depts);
-      if (rooms) setRoomsCache(rooms);
-      if (buildings) setBuildingsCache(buildings);
-      if (colleges) setCollegesCache(colleges);
+        if (rolesError) {
+          console.error("Error fetching user roles:", rolesError);
+        }
 
-      if (userRoles) {
-        const colleges = userRoles
-          .map((r) => String(r.college_id))
-          .filter(Boolean);
-        setUserCollegeIds(colleges);
+        console.log("User roles (role_id=3):", userRoles);
+
+        if (!userRoles || userRoles.length === 0) {
+          console.warn("No scheduler role (role_id=3) found for this user.");
+          setUserCollegeIds([]);
+          alert("No scheduler role found for your account. Please contact administrator.");
+          return;
+        }
+
+        // Extract college IDs from roles
+        const collegeIdentifiers = userRoles
+          .map((r: any) => r.college_id)
+          .filter((id): id is string => Boolean(id))
+          .map(id => String(id));
+
+        // Remove duplicates
+        const uniqueCollegeIdentifiers = Array.from(new Set(collegeIdentifiers));
+        console.log("User college identifiers:", uniqueCollegeIdentifiers);
+        
+        setUserCollegeIds(uniqueCollegeIdentifiers);
+
+        if (uniqueCollegeIdentifiers.length === 0) {
+          console.warn("No valid college_id found in user roles.");
+          alert("Your scheduler role has no college assigned. Please contact administrator.");
+          return;
+        }
+
+        // ✅ STEP 3: Fetch all data in parallel
+        const [
+          { data: allExamPeriods },
+          { data: allDepartments },
+          { data: allPrograms },
+          { data: mods },
+          { data: crs },
+          { data: trms },
+          { data: sectCourses },
+          { data: rooms },
+          { data: buildings },
+        ] = await Promise.all([
+          supabase.from("tbl_examperiod").select("*"),
+          supabase.from("tbl_department").select("department_id, college_id"),
+          supabase.from("tbl_program").select("*"),
+          supabase.from("tbl_modality").select("*"),
+          supabase.from("tbl_course").select("*"),
+          supabase.from("tbl_term").select("*"),
+          supabase.from("tbl_sectioncourse").select("*"),
+          supabase.from("tbl_rooms").select("room_id, building_id, room_capacity"),
+          supabase.from("tbl_buildings").select("building_id, building_name"),
+        ]);
+
+        console.log("Raw data counts:", {
+          examPeriods: allExamPeriods?.length || 0,
+          departments: allDepartments?.length || 0,
+          programs: allPrograms?.length || 0,
+        });
+
+        // ✅ STEP 4: Filter exam periods by user's college(s)
+        const filteredExamPeriods = (allExamPeriods || []).filter((p: any) => {
+          const collegeId = String(p.college_id);
+          return uniqueCollegeIdentifiers.includes(collegeId);
+        });
+
+        console.log("Filtered exam periods:", filteredExamPeriods.length);
+        if (filteredExamPeriods.length > 0) {
+          console.log("Sample exam period:", filteredExamPeriods[0]);
+        }
+
+        // ✅ STEP 5: Filter departments by user's college(s)
+        const filteredDepartments = (allDepartments || []).filter((d: any) => {
+          const collegeId = String(d.college_id);
+          return uniqueCollegeIdentifiers.includes(collegeId);
+        });
+
+        console.log("Filtered departments:", filteredDepartments.length);
+        if (filteredDepartments.length > 0) {
+          console.log("Sample department:", filteredDepartments[0]);
+        }
+
+        // Get department IDs
+        const allowedDeptIds = filteredDepartments.map((d: any) => String(d.department_id));
+        console.log("Allowed department IDs:", allowedDeptIds);
+
+        // ✅ STEP 6: Filter programs by allowed departments
+        const filteredPrograms = (allPrograms || []).filter((p: any) => {
+          const deptId = String(p.department_id);
+          return allowedDeptIds.includes(deptId);
+        });
+
+        console.log("Filtered programs:", filteredPrograms.length);
+        if (filteredPrograms.length > 0) {
+          console.log("Sample program:", filteredPrograms[0]);
+        }
+
+        // ✅ STEP 7: Set all state
+        setExamPeriods(filteredExamPeriods);
+        setDepartments(filteredDepartments);
+        setPrograms(filteredPrograms);
+        if (mods) setModalities(mods);
+        if (crs) setCourses(crs);
+        if (trms) setTerms(trms);
+        if (sectCourses) setSectionCourses(sectCourses);
+        if (rooms) setRoomsCache(rooms);
+        if (buildings) setBuildingsCache(buildings);
+
+        console.log("=== INITIAL DATA LOADED (CLIENT-SIDE FILTERED) ===", {
+          examPeriods: filteredExamPeriods.length,
+          departments: filteredDepartments.length,
+          programs: filteredPrograms.length,
+          userCollegeIds: uniqueCollegeIdentifiers,
+        });
+
+      } catch (err: any) {
+        console.error("Failed to fetch data:", err);
+        alert(err.message || "Failed to fetch data");
       }
     };
 
     fetchAll();
-  }, []);
+  }, [user]);
 
   const filteredCoursesByPrograms = useMemo(() => {
     if (formData.selectedPrograms.length === 0) return [];
@@ -333,505 +431,901 @@ const SchedulerPlottingSchedule: React.FC = () => {
     await assignExamSchedules();
   };
 
-const assignExamSchedules = async () => {
-  // Genetic Algorithm Parameters
-  const POPULATION_SIZE = 60;
-  const GENERATIONS = 150;
-  const MUTATION_RATE = 0.2;
-  const ELITE_SIZE = 8;
-  const TOURNAMENT_SIZE = 5;
+  const assignExamSchedules = async () => {
+    // ============================================================================
+    // CONFIGURATION - OPTIMIZED FOR PERFORMANCE AND NO OVERLAPS
+    // ============================================================================
+    const POPULATION_SIZE = 50;
+    const GENERATIONS = 100;
+    const MUTATION_RATE = 0.25;
+    const ELITE_SIZE = 5;
+    const TOURNAMENT_SIZE = 3;
+    const YIELD_EVERY_N_GENERATIONS = 10;
 
-  const unscheduledCourses: string[] = [];
+    // ============================================================================
+    // DATA PREPARATION
+    // ============================================================================
+    
+    let academicYear: string | null = null;
+    let semester: string | null = null;
+    if (formData.academic_year) {
+      const [yearPart, semPart] = formData.academic_year.split("|").map((s) => s.trim());
+      academicYear = yearPart ?? null;
+      semester = semPart ?? null;
+    }
 
-  // Prepare academic year and semester
-  let academicYear: string | null = null;
-  let semester: string | null = null;
-  if (formData.academic_year) {
-    const [yearPart, semPart] = formData.academic_year.split("|").map((s) => s.trim());
-    academicYear = yearPart ?? null;
-    semester = semPart ?? null;
-  }
+    const sortedDates = [...formData.selectedExamDates].sort();
+    const examPeriod =
+      sortedDates.length > 1
+        ? `${new Date(sortedDates[0]).toLocaleDateString("en-US", {
+            month: "long",
+            day: "numeric",
+            year: "numeric",
+          })} - ${new Date(sortedDates[sortedDates.length - 1]).toLocaleDateString("en-US", {
+            month: "long",
+            day: "numeric",
+            year: "numeric",
+          })}`
+        : new Date(sortedDates[0]).toLocaleDateString("en-US", {
+            month: "long",
+            day: "numeric",
+            year: "numeric",
+          });
 
-  // Format exam period string
-  const sortedDates = [...formData.selectedExamDates].sort();
-  const examPeriod =
-    sortedDates.length > 1
-      ? `${new Date(sortedDates[0]).toLocaleDateString("en-US", {
-          month: "long",
-          day: "numeric",
-          year: "numeric",
-        })} - ${new Date(sortedDates[sortedDates.length - 1]).toLocaleDateString("en-US", {
-          month: "long",
-          day: "numeric",
-          year: "numeric",
-        })}`
-      : new Date(sortedDates[0]).toLocaleDateString("en-US", {
-          month: "long",
-          day: "numeric",
-          year: "numeric",
+    // ============================================================================
+    // FETCH PROCTOR AVAILABILITY - OPTIMIZED
+    // ============================================================================
+    const { data: allAvailability, error: availError } = await supabase
+      .from("tbl_availability")
+      .select("user_id, days, time_slots")
+      .eq("status", "available");
+
+    if (availError) {
+      console.error("Error fetching availability:", availError);
+      toast.error("Failed to fetch proctor availability");
+      return;
+    }
+
+    const TIME_SLOT_RANGES: Record<string, string[]> = {
+      "7 AM - 1 PM (Morning)": ["07:00", "07:30", "08:00", "08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30"],
+      "1 PM - 6 PM (Afternoon)": ["13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30"],
+      "6 PM - 9 PM (Evening)": ["18:00", "18:30", "19:00", "19:30", "20:00", "20:30"]
+    };
+
+    const availabilityMap = new Map<string, Set<number>>();
+    
+    allAvailability?.forEach(a => {
+      const proctorId = a.user_id;
+      const daysArray = a.days || [];
+      const timeSlotsArray = a.time_slots || [];
+
+      daysArray.forEach((dayStr: string) => {
+        timeSlotsArray.forEach((timeSlotPeriod: string) => {
+          const specificTimes = TIME_SLOT_RANGES[timeSlotPeriod] || [];
+          
+          specificTimes.forEach(slot => {
+            const key = `${dayStr}|${slot}`;
+            if (!availabilityMap.has(key)) {
+              availabilityMap.set(key, new Set());
+            }
+            availabilityMap.get(key)!.add(proctorId);
+          });
         });
+      });
+    });
 
-  // Fetch all availability data at once
-  const { data: allAvailability } = await supabase
-    .from("tbl_availability")
-    .select("user_id, day")
-    .eq("status", "available")
-    .in("day", sortedDates);
+    // ============================================================================
+    // BUILD OPTIMIZED LOOKUP STRUCTURES
+    // ============================================================================
+    
+    const roomCapacityMap = new Map<string, number>();
+    roomsCache.forEach(r => roomCapacityMap.set(r.room_id, r.room_capacity));
 
-  // Build availability map: date -> array of proctor IDs
-  const availabilityMap = new Map<string, number[]>();
-  allAvailability?.forEach(a => {
-    if (!availabilityMap.has(a.day)) {
-      availabilityMap.set(a.day, []);
+    const buildingMap = new Map<string, string>();
+    buildingsCache.forEach(b => buildingMap.set(b.building_id, b.building_name));
+
+    const roomToBuildingMap = new Map<string, string>();
+    roomsCache.forEach(r => roomToBuildingMap.set(r.room_id, r.building_id));
+
+    const schedulerCollegeId = userCollegeIds[0];
+    const collegeObj = collegesCache?.find((c) => c.college_id === schedulerCollegeId);
+    const collegeNameForCourse = collegeObj?.college_name ?? "Unknown College";
+
+    const allSections: any[] = [];
+    const sectionMap = new Map<number, any>();
+    for (const modalityId of formData.selectedModalities) {
+      const selectedModality = modalities.find((m) => m.modality_id === modalityId);
+      if (selectedModality) {
+        allSections.push(selectedModality);
+        sectionMap.set(modalityId, selectedModality);
+      }
     }
-    availabilityMap.get(a.day)!.push(a.user_id);
-  });
 
-  // Build room capacity lookup map
-  const roomCapacityMap = new Map<string, number>();
-  roomsCache.forEach(r => {
-    roomCapacityMap.set(r.room_id, r.room_capacity);
-  });
+    const totalDurationMinutes = (duration.hours ?? 0) * 60 + (duration.minutes ?? 0);
 
-  // Build building lookup map
-  const buildingMap = new Map<string, string>();
-  buildingsCache.forEach(b => {
-    buildingMap.set(b.building_id, b.building_name);
-  });
+    // ============================================================================
+    // PRE-COMPUTE VALID TIMES AND ROOMS
+    // ============================================================================
 
-  // Build room to building map
-  const roomToBuildingMap = new Map<string, string>();
-  roomsCache.forEach(r => {
-    roomToBuildingMap.set(r.room_id, r.building_id);
-  });
+    const isValidTimeSlot = (startTime: string): boolean => {
+      const [startHour, startMinute] = startTime.split(":").map(Number);
+      const endMinutes = (startHour * 60 + startMinute) + totalDurationMinutes;
+      return endMinutes <= (20 * 60 + 60);
+    };
 
-  // Get college name once
-  const schedulerCollegeId = userCollegeIds[0];
-  const collegeObj = collegesCache?.find((c) => c.college_id === schedulerCollegeId);
-  const collegeNameForCourse = collegeObj?.college_name ?? "Unknown College";
+    const validTimes = times.filter(isValidTimeSlot);
 
-  // Group sections by course
-  const groupedByCourse: Record<string, any[]> = {};
-  for (const modalityId of formData.selectedModalities) {
-    const selectedModality = modalities.find((m) => m.modality_id === modalityId);
-    if (!selectedModality) continue;
-
-    const courseId = selectedModality.course_id;
-    if (!groupedByCourse[courseId]) groupedByCourse[courseId] = [];
-    groupedByCourse[courseId].push(selectedModality);
-  }
-
-  const totalDurationMinutes = (duration.hours ?? 0) * 60 + (duration.minutes ?? 0);
-
-  // Helper function to extract year level from section name
-  const extractYearLevel = (sectionName: string | null | undefined): string => {
-    if (!sectionName) return "Unknown";
-    const match = sectionName.match(/(\d)/);
-    return match ? match[1] : "Unknown";
-  };
-
-  // Helper to get time slots for duration
-  const getTimeSlots = (startTime: string): string[] => {
-    const [startHour, startMinute] = startTime.split(":").map(Number);
-    const slotMinutes: string[] = [];
-    for (let m = 0; m < totalDurationMinutes; m += 30) {
-      const h = startHour + Math.floor((startMinute + m) / 60);
-      const mi = (startMinute + m) % 60;
-      slotMinutes.push(`${String(h).padStart(2, "0")}:${String(mi).padStart(2, "0")}`);
-    }
-    return slotMinutes;
-  };
-
-  // ONLY use selected dates - no extended dates
-  const allAvailableDates = [...sortedDates];
-
-  // Pre-calculate suitable rooms per section to speed up generation
-  const suitableRoomsBySection = new Map<number, string[]>();
-  for (const [_, sections] of Object.entries(groupedByCourse)) {
-    for (const section of sections) {
+    const sectionRoomsMap = new Map<number, string[]>();
+    allSections.forEach(section => {
       const enrolledCount = section.enrolled_students ?? 0;
       const possibleRooms = section.possible_rooms ?? [];
       
-      // Preferred rooms first
-      const preferred = possibleRooms.filter((r: string) => {
-        const capacity = roomCapacityMap.get(r);
-        return capacity && capacity >= enrolledCount;
-      });
-      
-      // All suitable rooms
       const allSuitable = Array.from(roomCapacityMap.entries())
         .filter(([_, capacity]) => capacity >= enrolledCount)
-        .map(([id, _]) => id);
+        .map(([id, _]) => id)
+        .sort((a, b) => {
+          const capA = roomCapacityMap.get(a) || 0;
+          const capB = roomCapacityMap.get(b) || 0;
+          const wasteA = Math.abs(capA - enrolledCount);
+          const wasteB = Math.abs(capB - enrolledCount);
+          return wasteA - wasteB;
+        });
       
-      // Combine: preferred first, then others
-      const combined = [...new Set([...preferred, ...allSuitable])];
-      suitableRoomsBySection.set(section.modality_id, combined);
-    }
-  }
-
-  // Gene: represents a course assignment
-  interface Gene {
-    courseId: string;
-    date: string;
-    timeSlot: string;
-    roomAssignments: string[]; // One room per section
-    proctorAssignments: number[]; // One proctor per section
-  }
-
-  // Chromosome: a complete schedule (array of genes)
-  type Chromosome = Gene[];
-
-  // Generate random chromosome with better logic
-  const generateRandomChromosome = (): Chromosome => {
-    const chromosome: Chromosome = [];
-
-    for (const [courseId, sections] of Object.entries(groupedByCourse)) {
-      // Random date from SELECTED dates only
-      const date = allAvailableDates[Math.floor(Math.random() * allAvailableDates.length)];
-
-      // Random time
-      const timeSlot = times[Math.floor(Math.random() * times.length)];
-
-      // Get available proctors for this date
-      const availableProctors = availabilityMap.get(date) || [];
+      const preferred = possibleRooms.filter((r: string) => allSuitable.includes(r));
+      const others = allSuitable.filter(r => !preferred.includes(r));
       
-      // Assign rooms and proctors for each section
-      const roomAssignments: string[] = [];
-      const proctorAssignments: number[] = [];
+      sectionRoomsMap.set(section.modality_id, [...preferred, ...others]);
+    });
 
-      for (const section of sections) {
-        // Get suitable rooms for this section
-        const suitableRooms = suitableRoomsBySection.get(section.modality_id) || [];
-        
-        const roomId = suitableRooms.length > 0
-          ? suitableRooms[Math.floor(Math.random() * suitableRooms.length)]
-          : "";
+    // ============================================================================
+    // HELPER FUNCTIONS
+    // ============================================================================
 
-        // Assign proctor
-        const proctorId = availableProctors.length > 0
-          ? availableProctors[Math.floor(Math.random() * availableProctors.length)]
-          : -1;
+    const extractYearLevel = (sectionName: string | null | undefined): string => {
+      if (!sectionName) return "Unknown";
+      const match = sectionName.match(/(\d)/);
+      return match ? match[1] : "Unknown";
+    };
 
-        roomAssignments.push(roomId);
-        proctorAssignments.push(proctorId);
+    const timeToMinutes = (time: string): number => {
+      const [hours, minutes] = time.split(':').map(Number);
+      return hours * 60 + minutes;
+    };
+
+    const rangesOverlap = (start1: number, end1: number, start2: number, end2: number): boolean => {
+      return start1 < end2 && start2 < end1;
+    };
+
+    const getTimeSlots = (startTime: string): string[] => {
+      const [startHour, startMinute] = startTime.split(":").map(Number);
+      const slots: string[] = [];
+      for (let m = 0; m < totalDurationMinutes; m += 30) {
+        const h = startHour + Math.floor((startMinute + m) / 60);
+        const mi = (startMinute + m) % 60;
+        slots.push(`${String(h).padStart(2, "0")}:${String(mi).padStart(2, "0")}`);
       }
+      return slots;
+    };
 
-      chromosome.push({
-        courseId,
-        date,
-        timeSlot,
-        roomAssignments,
-        proctorAssignments
+    const getAvailableProctors = (date: string, startTime: string): number[] => {
+      const examTimeSlots = getTimeSlots(startTime);
+      
+      const proctorSets = examTimeSlots.map(slot => {
+        const key = `${date}|${slot}`;
+        return availabilityMap.get(key) || new Set<number>();
       });
+      
+      if (proctorSets.length === 0) return [];
+      
+      const availableProctors = Array.from(proctorSets[0]).filter(proctorId =>
+        proctorSets.every(set => set.has(proctorId))
+      );
+      
+      return availableProctors;
+    };
+
+    // ============================================================================
+    // PRE-VALIDATION
+    // ============================================================================
+    
+    const violations: string[] = [];
+    
+    const maxRoomCapacity = Math.max(...Array.from(roomCapacityMap.values()));
+    for (const section of allSections) {
+      const enrolledCount = section.enrolled_students ?? 0;
+      if (enrolledCount > maxRoomCapacity) {
+        violations.push(
+          `Section ${section.course_id} - ${section.section_name} (${enrolledCount} students) exceeds maximum room capacity (${maxRoomCapacity})`
+        );
+      }
     }
 
-    return chromosome;
-  };
-
-  // Fitness function (lower is better)
-  const calculateFitness = (chromosome: Chromosome): number => {
-    let penalties = 0;
-
-    // Track conflicts
-    const roomSchedule: Record<string, Record<string, Set<string>>> = {};
-    const proctorSchedule: Record<string, Record<string, Set<number>>> = {};
-    const yearLevelProgramSchedule: Record<string, Record<string, Set<string>>> = {};
-    const consecutiveTracker: Record<string, Map<string, string>> = {}; // date -> "yearLevel-programId" -> lastTimeSlot
-    const dateUsageCount: Record<string, number> = {}; // Track how many courses per date
-
-    for (const gene of chromosome) {
-      const { courseId, date, timeSlot, roomAssignments, proctorAssignments } = gene;
-      const sections = groupedByCourse[courseId];
-      const timeSlots = getTimeSlots(timeSlot);
-
-      const yearLevel = extractYearLevel(sections[0]?.section_name);
-      const programId = sections[0]?.program_id;
-      const key = `${yearLevel}-${programId}`;
-
-      // Track date usage
-      dateUsageCount[date] = (dateUsageCount[date] || 0) + 1;
-
-      // Initialize tracking structures
-      if (!roomSchedule[date]) roomSchedule[date] = {};
-      if (!proctorSchedule[date]) proctorSchedule[date] = {};
-      if (!yearLevelProgramSchedule[date]) yearLevelProgramSchedule[date] = {};
-      if (!consecutiveTracker[date]) consecutiveTracker[date] = new Map();
-
-      // Check year level + program conflicts (students can't have 2 exams at same time)
-      for (const slot of timeSlots) {
-        if (!yearLevelProgramSchedule[date][slot]) {
-          yearLevelProgramSchedule[date][slot] = new Set();
+    const datesWithoutProctors: string[] = [];
+    for (const date of sortedDates) {
+      let hasAnyProctors = false;
+      for (const timeSlot of validTimes) {
+        const proctors = getAvailableProctors(date, timeSlot);
+        if (proctors.length > 0) {
+          hasAnyProctors = true;
+          break;
         }
-        if (yearLevelProgramSchedule[date][slot].has(key)) {
-          penalties += 200; // CRITICAL: Student conflict
-        }
-        yearLevelProgramSchedule[date][slot].add(key);
       }
+      if (!hasAnyProctors) {
+        datesWithoutProctors.push(date);
+      }
+    }
 
-      // Check consecutive conflicts (no back-to-back exams for same year+program)
-      const lastTimeSlot = consecutiveTracker[date].get(key);
-      if (lastTimeSlot) {
-        const lastIndex = times.indexOf(lastTimeSlot);
-        const currentIndex = times.indexOf(timeSlot);
-        const slotsNeeded = Math.ceil(totalDurationMinutes / 30);
+    if (datesWithoutProctors.length > 0) {
+      const formattedDates = datesWithoutProctors.map(d => new Date(d).toLocaleDateString()).join(", ");
+      violations.push(
+        `No proctors available for: ${formattedDates}\n\nPlease ensure proctors have set their availability.`
+      );
+    }
+
+    if (violations.length > 0) {
+      alert(`Cannot generate schedule:\n\n${violations.join("\n\n")}`);
+      return;
+    }
+
+    // ============================================================================
+    // GENETIC ALGORITHM
+    // ============================================================================
+
+    interface Gene {
+      sectionId: number;
+      date: string;
+      timeSlot: string;
+      roomId: string;
+      proctorId: number;
+    }
+
+    type Chromosome = Gene[];
+
+    const generateRandomChromosome = (): Chromosome => {
+      const chromosome: Chromosome = [];
+      
+      // Group sections by course
+      const sectionsByCourse = new Map<string, any[]>();
+      allSections.forEach(section => {
+        const courseId = section.course_id;
+        if (!sectionsByCourse.has(courseId)) {
+          sectionsByCourse.set(courseId, []);
+        }
+        sectionsByCourse.get(courseId)!.push(section);
+      });
+
+      // CRITICAL: Assign each course to ONE specific date
+      const courseDateAssignment = new Map<string, string>();
+      const coursesArray = Array.from(sectionsByCourse.keys());
+      
+      coursesArray.forEach(courseId => {
+        const randomDate = sortedDates[Math.floor(Math.random() * sortedDates.length)];
+        courseDateAssignment.set(courseId, randomDate);
+      });
+
+      const usedTimeSlotsPerDate = new Map<string, Map<string, string>>();
+      const courseTimeSlotAssignments = new Map<string, Map<string, string>>();
+      
+      // Track time ranges to prevent overlaps
+      const roomTimeRanges = new Map<string, Array<{start: number, end: number}>>();
+      const proctorTimeRanges = new Map<string, Array<{start: number, end: number}>>();
+
+      for (const section of allSections) {
+        const yearLevel = extractYearLevel(section.section_name);
+        const courseId = section.course_id;
         
-        // Check if current exam starts right after previous exam ends
-        if (currentIndex !== -1 && lastIndex !== -1 && currentIndex === lastIndex + slotsNeeded) {
-          penalties += 80; // Back-to-back penalty
+        // CRITICAL: All sections of the same course MUST be on the same date
+        const date = courseDateAssignment.get(courseId)!;
+        
+        if (!usedTimeSlotsPerDate.has(date)) {
+          usedTimeSlotsPerDate.set(date, new Map());
         }
+        const dateSlots = usedTimeSlotsPerDate.get(date)!;
+        
+        if (!courseTimeSlotAssignments.has(courseId)) {
+          courseTimeSlotAssignments.set(courseId, new Map());
+        }
+        
+        let timeSlot: string;
+        
+        // All sections of same course get same time slot
+        if (courseTimeSlotAssignments.get(courseId)!.has(date)) {
+          timeSlot = courseTimeSlotAssignments.get(courseId)!.get(date)!;
+        } else {
+          timeSlot = validTimes[Math.floor(Math.random() * validTimes.length)];
+          let attempts = 0;
+          const maxAttempts = 15;
+          
+          while (attempts < maxAttempts) {
+            const timeIndex = validTimes.indexOf(timeSlot);
+            const prevSlot = timeIndex > 0 ? validTimes[timeIndex - 1] : null;
+            const nextSlot = timeIndex < validTimes.length - 1 ? validTimes[timeIndex + 1] : null;
+            
+            const hasConflict = 
+              dateSlots.get(timeSlot) === yearLevel ||
+              (prevSlot && dateSlots.get(prevSlot) === yearLevel) ||
+              (nextSlot && dateSlots.get(nextSlot) === yearLevel);
+            
+            if (!hasConflict) {
+              break;
+            }
+            
+            timeSlot = validTimes[Math.floor(Math.random() * validTimes.length)];
+            attempts++;
+          }
+          
+          courseTimeSlotAssignments.get(courseId)!.set(date, timeSlot);
+          dateSlots.set(timeSlot, yearLevel);
+        }
+        
+        const startMinutes = timeToMinutes(timeSlot);
+        const endMinutes = startMinutes + totalDurationMinutes;
+        
+        // Find suitable rooms that don't have time overlaps
+        const suitableRooms = sectionRoomsMap.get(section.modality_id) || [];
+        let roomId = "";
+        
+        for (const room of suitableRooms) {
+          const roomDateKey = `${date}|${room}`;
+          const existingRanges = roomTimeRanges.get(roomDateKey) || [];
+          
+          let hasOverlap = false;
+          for (const range of existingRanges) {
+            if (rangesOverlap(startMinutes, endMinutes, range.start, range.end)) {
+              hasOverlap = true;
+              break;
+            }
+          }
+          
+          if (!hasOverlap) {
+            roomId = room;
+            if (!roomTimeRanges.has(roomDateKey)) {
+              roomTimeRanges.set(roomDateKey, []);
+            }
+            roomTimeRanges.get(roomDateKey)!.push({ start: startMinutes, end: endMinutes });
+            break;
+          }
+        }
+        
+        // If no room found without overlap, pick random (will be fixed by evolution)
+        if (!roomId && suitableRooms.length > 0) {
+          roomId = suitableRooms[Math.floor(Math.random() * suitableRooms.length)];
+        }
+        
+        // CRITICAL: Find proctors that don't have ANY time overlaps (can only be in one room at a time)
+        const availableProctors = getAvailableProctors(date, timeSlot);
+        let proctorId = -1;
+        
+        for (const proctor of availableProctors) {
+          const proctorDateKey = `${date}|${proctor}`;
+          const existingRanges = proctorTimeRanges.get(proctorDateKey) || [];
+          
+          let hasOverlap = false;
+          for (const range of existingRanges) {
+            if (rangesOverlap(startMinutes, endMinutes, range.start, range.end)) {
+              hasOverlap = true;
+              break;
+            }
+          }
+          
+          if (!hasOverlap) {
+            proctorId = proctor;
+            if (!proctorTimeRanges.has(proctorDateKey)) {
+              proctorTimeRanges.set(proctorDateKey, []);
+            }
+            proctorTimeRanges.get(proctorDateKey)!.push({ start: startMinutes, end: endMinutes });
+            break;
+          }
+        }
+        
+        // If no proctor found without overlap, pick random (will be fixed by evolution)
+        if (proctorId === -1 && availableProctors.length > 0) {
+          proctorId = availableProctors[Math.floor(Math.random() * availableProctors.length)];
+        }
+
+        chromosome.push({ sectionId: section.modality_id, date, timeSlot, roomId, proctorId });
       }
-      consecutiveTracker[date].set(key, timeSlot);
 
-      // Check room and proctor conflicts
-      sections.forEach((section: any, idx: number) => {
-        const roomId = roomAssignments[idx];
-        const proctorId = proctorAssignments[idx];
+      return chromosome;
+    };
+
+    const calculateFitness = (chromosome: Chromosome): number => {
+      let fitness = 0;
+
+      const roomSchedule = new Map<string, Set<string>>();
+      const proctorSchedule = new Map<string, Set<number>>();
+      const studentSchedule = new Map<string, Set<string>>();
+      const proctorLoadCount = new Map<number, number>();
+      const sectionScheduledCount = new Map<number, number>();
+      const yearLevelByTimeSlot = new Map<string, Set<string>>();
+      const collegeSchedule = new Map<string, Set<string>>();
+      const courseTimeSlots = new Map<string, Map<string, Set<string>>>();
+      const courseDateAssignments = new Map<string, Set<string>>();
+      
+      // Track all time slots used by each entity to detect overlaps
+      const roomTimeRanges = new Map<string, Array<{start: number, end: number, sectionId: number}>>();
+      const proctorTimeRanges = new Map<string, Array<{start: number, end: number, sectionId: number}>>();
+
+      for (const gene of chromosome) {
+        const section = sectionMap.get(gene.sectionId);
+        if (!section) continue;
+
+        const { date, timeSlot, roomId, proctorId } = gene;
+        const timeSlots = getTimeSlots(timeSlot);
         const enrolledCount = section.enrolled_students ?? 0;
+        const yearLevel = extractYearLevel(section.section_name);
+        const programId = section.program_id;
+        const courseId = section.course_id;
 
-        // Room penalties
+        // Calculate time range for this exam
+        const startMinutes = timeToMinutes(timeSlot);
+        const endMinutes = startMinutes + totalDurationMinutes;
+
+        // Section uniqueness
+        sectionScheduledCount.set(gene.sectionId, (sectionScheduledCount.get(gene.sectionId) || 0) + 1);
+        if (sectionScheduledCount.get(gene.sectionId)! > 1) {
+          fitness -= 10000;
+        }
+
+        // CRITICAL RULE: All sections of same course MUST be on same date
+        if (!courseDateAssignments.has(courseId)) {
+          courseDateAssignments.set(courseId, new Set());
+        }
+        courseDateAssignments.get(courseId)!.add(date);
+        
+        if (courseDateAssignments.get(courseId)!.size > 1) {
+          fitness -= 25000; // MASSIVE PENALTY: Course split across multiple dates
+        }
+
+        // RULE I: Same Course MUST be at Same Time
+        if (!courseTimeSlots.has(courseId)) {
+          courseTimeSlots.set(courseId, new Map());
+        }
+        if (!courseTimeSlots.get(courseId)!.has(date)) {
+          courseTimeSlots.get(courseId)!.set(date, new Set());
+        }
+        
+        const courseTimesForDate = courseTimeSlots.get(courseId)!.get(date)!;
+        
+        if (courseTimesForDate.size > 0) {
+          const existingTimeSlot = Array.from(courseTimesForDate)[0];
+          if (existingTimeSlot !== timeSlot) {
+            fitness -= 15000; // CRITICAL: Same course at different times
+          }
+        }
+        courseTimesForDate.add(timeSlot);
+
+        // Student conflicts
+        const studentKey = `${yearLevel}-${programId}`;
+
+        for (const slot of timeSlots) {
+          const studentKey2 = `${date}|${slot}`;
+          if (!studentSchedule.has(studentKey2)) studentSchedule.set(studentKey2, new Set());
+          if (studentSchedule.get(studentKey2)!.has(studentKey)) {
+            fitness -= 5000;
+          }
+          studentSchedule.get(studentKey2)!.add(studentKey);
+        }
+
+        // RULE II: Year Level Consistency (Vertical Alignment)
+        const timeSlotKey = `${date}|${timeSlot}`;
+        if (!yearLevelByTimeSlot.has(timeSlotKey)) {
+          yearLevelByTimeSlot.set(timeSlotKey, new Set());
+        }
+        yearLevelByTimeSlot.get(timeSlotKey)!.add(yearLevel);
+        
+        if (yearLevelByTimeSlot.get(timeSlotKey)!.size > 1) {
+          fitness -= 8000; // CRITICAL: Mixed year levels at same time
+        }
+
+        // RULE III: College Overlap Prevention
+        const program = programs.find(p => p.program_id === programId);
+        const collegeId = program ? String(program.department_id) : "unknown";
+        
+        for (const slot of timeSlots) {
+          const collegeKey = `${date}|${slot}|${collegeId}`;
+          if (!collegeSchedule.has(collegeKey)) collegeSchedule.set(collegeKey, new Set());
+          
+          if (collegeSchedule.get(collegeKey)!.size > 0) {
+            fitness -= 7000; // CRITICAL: College overlap
+          }
+          collegeSchedule.get(collegeKey)!.add(section.course_id);
+        }
+
+        // Room capacity and NO TIME OVERLAPS
         if (!roomId || roomId === "") {
-          penalties += 1500; // CRITICAL: No room assigned
+          fitness -= 8000;
         } else {
           const roomCapacity = roomCapacityMap.get(roomId);
           
           if (!roomCapacity || roomCapacity < enrolledCount) {
-            penalties += 300; // Insufficient capacity
+            fitness -= 7000;
+          } else {
+            const wastedCapacity = roomCapacity - enrolledCount;
+            fitness -= wastedCapacity * 1;
           }
 
-          // Check room time conflicts
-          for (const slot of timeSlots) {
-            if (!roomSchedule[date][slot]) roomSchedule[date][slot] = new Set();
-            if (roomSchedule[date][slot].has(roomId)) {
-              penalties += 200; // Room double-booked
+          // Check for time range overlaps in the same room
+          const roomDateKey = `${date}|${roomId}`;
+          if (!roomTimeRanges.has(roomDateKey)) {
+            roomTimeRanges.set(roomDateKey, []);
+          }
+          
+          const existingRanges = roomTimeRanges.get(roomDateKey)!;
+          for (const existing of existingRanges) {
+            if (rangesOverlap(startMinutes, endMinutes, existing.start, existing.end)) {
+              fitness -= 20000; // CRITICAL: Room time overlap
             }
-            roomSchedule[date][slot].add(roomId);
+          }
+          
+          existingRanges.push({ start: startMinutes, end: endMinutes, sectionId: gene.sectionId });
+
+          // Keep old slot-by-slot check as backup
+          for (const slot of timeSlots) {
+            const roomKey = `${date}|${slot}`;
+            if (!roomSchedule.has(roomKey)) roomSchedule.set(roomKey, new Set());
+            if (roomSchedule.get(roomKey)!.has(roomId)) {
+              fitness -= 9000;
+            }
+            roomSchedule.get(roomKey)!.add(roomId);
           }
         }
 
-        // Proctor penalties
+        // CRITICAL: Proctor can only be in ONE place at a time (NO SUPERHERO PROCTORS)
         if (proctorId === -1) {
-          penalties += 800; // CRITICAL: No proctor assigned
+          fitness -= 6000;
         } else {
-          // Check proctor time conflicts
-          for (const slot of timeSlots) {
-            if (!proctorSchedule[date][slot]) proctorSchedule[date][slot] = new Set();
-            if (proctorSchedule[date][slot].has(proctorId)) {
-              penalties += 150; // Proctor double-booked
+          const availableProctors = getAvailableProctors(date, timeSlot);
+          if (!availableProctors.includes(proctorId)) {
+            fitness -= 4000;
+          }
+
+          proctorLoadCount.set(proctorId, (proctorLoadCount.get(proctorId) || 0) + 1);
+
+          // Check for time range overlaps for the same proctor
+          const proctorDateKey = `${date}|${proctorId}`;
+          if (!proctorTimeRanges.has(proctorDateKey)) {
+            proctorTimeRanges.set(proctorDateKey, []);
+          }
+          
+          const existingProctorRanges = proctorTimeRanges.get(proctorDateKey)!;
+          for (const existing of existingProctorRanges) {
+            if (rangesOverlap(startMinutes, endMinutes, existing.start, existing.end)) {
+              fitness -= 30000; // MASSIVE PENALTY: Proctor in multiple rooms at same time!
             }
-            proctorSchedule[date][slot].add(proctorId);
+          }
+          
+          existingProctorRanges.push({ start: startMinutes, end: endMinutes, sectionId: gene.sectionId });
+
+          // Keep old slot-by-slot check as backup
+          for (const slot of timeSlots) {
+            const proctorKey = `${date}|${slot}`;
+            if (!proctorSchedule.has(proctorKey)) proctorSchedule.set(proctorKey, new Set());
+            if (proctorSchedule.get(proctorKey)!.has(proctorId)) {
+              fitness -= 15000; // Very high penalty for proctor being in multiple places
+            }
+            proctorSchedule.get(proctorKey)!.add(proctorId);
+          }
+        }
+      }
+
+      // RULE II (Part B): Sequential Year-Level Breaks
+      const timeSlotsByDate = new Map<string, string[]>();
+      for (const gene of chromosome) {
+        if (!timeSlotsByDate.has(gene.date)) {
+          timeSlotsByDate.set(gene.date, []);
+        }
+        if (!timeSlotsByDate.get(gene.date)!.includes(gene.timeSlot)) {
+          timeSlotsByDate.get(gene.date)!.push(gene.timeSlot);
+        }
+      }
+
+      for (const [date, slots] of timeSlotsByDate) {
+        const sortedSlots = slots.sort();
+        
+        for (let i = 0; i < sortedSlots.length - 1; i++) {
+          const currentSlot = sortedSlots[i];
+          const nextSlot = sortedSlots[i + 1];
+          
+          const currentKey = `${date}|${currentSlot}`;
+          const nextKey = `${date}|${nextSlot}`;
+          
+          const currentYearLevels = yearLevelByTimeSlot.get(currentKey);
+          const nextYearLevels = yearLevelByTimeSlot.get(nextKey);
+          
+          if (currentYearLevels && nextYearLevels) {
+            for (const year of currentYearLevels) {
+              if (nextYearLevels.has(year)) {
+                fitness -= 6000; // CRITICAL: Same year level in consecutive slots
+              }
+            }
+          }
+        }
+      }
+
+      // Reward scheduled sections
+      const scheduledCount = chromosome.filter(g => g.roomId && g.roomId !== "" && g.proctorId !== -1).length;
+      fitness += scheduledCount * 1000;
+
+      // Proctor load balancing
+      const loads = Array.from(proctorLoadCount.values());
+      if (loads.length > 1) {
+        const avgLoad = loads.reduce((a, b) => a + b, 0) / loads.length;
+        const variance = loads.reduce((sum, load) => sum + Math.pow(load - avgLoad, 2), 0) / loads.length;
+        fitness -= variance * 50;
+      }
+
+      return fitness;
+    };
+
+    const tournamentSelection = (population: Chromosome[], fitnesses: number[]): Chromosome => {
+      let best = Math.floor(Math.random() * population.length);
+      for (let i = 1; i < TOURNAMENT_SIZE; i++) {
+        const contestant = Math.floor(Math.random() * population.length);
+        if (fitnesses[contestant] > fitnesses[best]) best = contestant;
+      }
+      return population[best].map(gene => ({ ...gene }));
+    };
+
+    const crossover = (parent1: Chromosome, parent2: Chromosome): [Chromosome, Chromosome] => {
+      const child1: Chromosome = [];
+      const child2: Chromosome = [];
+      
+      for (let i = 0; i < parent1.length; i++) {
+        if (Math.random() < 0.5) {
+          child1.push({ ...parent1[i] });
+          child2.push({ ...parent2[i] });
+        } else {
+          child1.push({ ...parent2[i] });
+          child2.push({ ...parent1[i] });
+        }
+      }
+      
+      return [child1, child2];
+    };
+
+    const mutate = (chromosome: Chromosome): Chromosome => {
+      // First, establish course-to-date mapping from current chromosome
+      const courseDateMap = new Map<string, string>();
+      chromosome.forEach(gene => {
+        const section = sectionMap.get(gene.sectionId);
+        if (section) {
+          const courseId = section.course_id;
+          if (!courseDateMap.has(courseId)) {
+            courseDateMap.set(courseId, gene.date);
           }
         }
       });
-    }
 
-    // NEW: Penalize uneven date distribution
-    const totalCourses = chromosome.length;
-    const numDates = allAvailableDates.length;
-    const idealCoursesPerDate = totalCourses / numDates;
-    
-    // Calculate variance in date usage
-    let distributionPenalty = 0;
-    for (const date of allAvailableDates) {
-      const count = dateUsageCount[date] || 0;
-      const deviation = Math.abs(count - idealCoursesPerDate);
-      distributionPenalty += deviation * 30; // Penalize uneven distribution
-    }
-    
-    penalties += distributionPenalty;
-
-    return penalties;
-  };
-
-  // Tournament selection
-  const tournamentSelection = (population: Chromosome[], fitnesses: number[]): Chromosome => {
-    let best = Math.floor(Math.random() * population.length);
-    
-    for (let i = 1; i < TOURNAMENT_SIZE; i++) {
-      const contestant = Math.floor(Math.random() * population.length);
-      if (fitnesses[contestant] < fitnesses[best]) {
-        best = contestant;
-      }
-    }
-    
-    return [...population[best].map(gene => ({ ...gene, roomAssignments: [...gene.roomAssignments], proctorAssignments: [...gene.proctorAssignments] }))];
-  };
-
-  // Crossover (uniform crossover for better mixing)
-  const crossover = (parent1: Chromosome, parent2: Chromosome): [Chromosome, Chromosome] => {
-    const child1: Chromosome = [];
-    const child2: Chromosome = [];
-    
-    for (let i = 0; i < parent1.length; i++) {
-      if (Math.random() < 0.5) {
-        child1.push({ ...parent1[i], roomAssignments: [...parent1[i].roomAssignments], proctorAssignments: [...parent1[i].proctorAssignments] });
-        child2.push({ ...parent2[i], roomAssignments: [...parent2[i].roomAssignments], proctorAssignments: [...parent2[i].proctorAssignments] });
-      } else {
-        child1.push({ ...parent2[i], roomAssignments: [...parent2[i].roomAssignments], proctorAssignments: [...parent2[i].proctorAssignments] });
-        child2.push({ ...parent1[i], roomAssignments: [...parent1[i].roomAssignments], proctorAssignments: [...parent1[i].proctorAssignments] });
-      }
-    }
-    
-    return [child1, child2];
-  };
-
-  // Mutation (improved)
-  const mutate = (chromosome: Chromosome): Chromosome => {
-    return chromosome.map(gene => {
-      if (Math.random() < MUTATION_RATE) {
-        const mutationType = Math.floor(Math.random() * 4);
-        const sections = groupedByCourse[gene.courseId];
-        
-        if (mutationType === 0) {
-          // Mutate date (only from selected dates)
-          const newDate = allAvailableDates[Math.floor(Math.random() * allAvailableDates.length)];
+      return chromosome.map(gene => {
+        if (Math.random() < MUTATION_RATE) {
+          const section = sectionMap.get(gene.sectionId);
+          if (!section) return { ...gene };
           
-          // Also reassign proctors for the new date
-          const availableProctors = availabilityMap.get(newDate) || [];
-          const newProctorAssignments = gene.proctorAssignments.map(() => 
-            availableProctors.length > 0 
+          const courseId = section.course_id;
+          const mutationType = Math.floor(Math.random() * 4);
+          const suitableRooms = sectionRoomsMap.get(gene.sectionId) || [];
+          
+          if (mutationType === 0) {
+            // Date mutation - but keep course on same date
+            // Only mutate if we want to move the ENTIRE course to a new date
+            const shouldMoveEntireCourse = Math.random() < 0.3; // 30% chance to move entire course
+            
+            if (shouldMoveEntireCourse) {
+              const newDate = sortedDates[Math.floor(Math.random() * sortedDates.length)];
+              courseDateMap.set(courseId, newDate); // Update the mapping
+              const availableProctors = getAvailableProctors(newDate, gene.timeSlot);
+              const newProctorId = availableProctors.length > 0
+                ? availableProctors[Math.floor(Math.random() * availableProctors.length)]
+                : -1;
+              return { ...gene, date: newDate, proctorId: newProctorId };
+            } else {
+              // Don't change date - keep course together
+              return { ...gene };
+            }
+          } else if (mutationType === 1) {
+            // Time slot mutation
+            const newTimeSlot = validTimes[Math.floor(Math.random() * validTimes.length)];
+            const availableProctors = getAvailableProctors(gene.date, newTimeSlot);
+            const newProctorId = availableProctors.length > 0
               ? availableProctors[Math.floor(Math.random() * availableProctors.length)]
-              : -1
-          );
-          
-          return { ...gene, date: newDate, proctorAssignments: newProctorAssignments };
-        } else if (mutationType === 1) {
-          // Mutate time
-          return { ...gene, timeSlot: times[Math.floor(Math.random() * times.length)] };
-        } else if (mutationType === 2) {
-          // Mutate room for a random section
-          const sectionIdx = Math.floor(Math.random() * sections.length);
-          const section = sections[sectionIdx];
-          const suitableRooms = suitableRoomsBySection.get(section.modality_id) || [];
-          
-          if (suitableRooms.length > 0) {
-            const newRoomAssignments = [...gene.roomAssignments];
-            newRoomAssignments[sectionIdx] = suitableRooms[Math.floor(Math.random() * suitableRooms.length)];
-            return { ...gene, roomAssignments: newRoomAssignments };
-          }
-        } else {
-          // Mutate proctor for a random section
-          const sectionIdx = Math.floor(Math.random() * sections.length);
-          const availableProctors = availabilityMap.get(gene.date) || [];
-          
-          if (availableProctors.length > 0) {
-            const newProctorAssignments = [...gene.proctorAssignments];
-            newProctorAssignments[sectionIdx] = availableProctors[Math.floor(Math.random() * availableProctors.length)];
-            return { ...gene, proctorAssignments: newProctorAssignments };
+              : -1;
+            return { ...gene, timeSlot: newTimeSlot, proctorId: newProctorId };
+          } else if (mutationType === 2) {
+            // Room mutation
+            const newRoomId = suitableRooms.length > 0
+              ? suitableRooms[Math.floor(Math.random() * suitableRooms.length)]
+              : "";
+            return { ...gene, roomId: newRoomId };
+          } else {
+            // Proctor mutation
+            const availableProctors = getAvailableProctors(gene.date, gene.timeSlot);
+            const newProctorId = availableProctors.length > 0
+              ? availableProctors[Math.floor(Math.random() * availableProctors.length)]
+              : -1;
+            return { ...gene, proctorId: newProctorId };
           }
         }
-      }
-      return { ...gene, roomAssignments: [...gene.roomAssignments], proctorAssignments: [...gene.proctorAssignments] };
-    });
-  };
+        return { ...gene };
+      });
+    };
 
-  // Initialize population
-  console.log("Initializing population...");
-  let population: Chromosome[] = [];
-  for (let i = 0; i < POPULATION_SIZE; i++) {
-    population.push(generateRandomChromosome());
-  }
+    // ============================================================================
+    // EVOLUTION WITH YIELDING
+    // ============================================================================
 
-  let bestChromosome: Chromosome | null = null;
-  let bestFitness = Infinity;
-
-  // Evolution loop
-  console.log("Starting evolution...");
-  for (let generation = 0; generation < GENERATIONS; generation++) {
-    // Calculate fitness for all chromosomes
-    const fitnesses = population.map(calculateFitness);
+    console.log("🧬 Starting genetic algorithm...");
+    toast.info("Generating schedule... This may take a moment.", { autoClose: 2000 });
     
-    // Track best solution
-    const currentBestIdx = fitnesses.indexOf(Math.min(...fitnesses));
-    if (fitnesses[currentBestIdx] < bestFitness) {
-      bestFitness = fitnesses[currentBestIdx];
-      bestChromosome = population[currentBestIdx];
-      console.log(`Generation ${generation + 1}/${GENERATIONS}: Best fitness = ${bestFitness}`);
+    let population: Chromosome[] = [];
+    for (let i = 0; i < POPULATION_SIZE; i++) {
+      population.push(generateRandomChromosome());
     }
 
-    // Stop early if perfect solution found
-    if (bestFitness === 0) {
-      console.log("Perfect solution found!");
-      break;
-    }
+    let bestChromosome: Chromosome | null = null;
+    let bestFitness = -Infinity;
 
-    // Create next generation
-    const nextPopulation: Chromosome[] = [];
-
-    // Elitism: keep best solutions
-    const sortedIndices = fitnesses
-      .map((fit, idx) => ({ fit, idx }))
-      .sort((a, b) => a.fit - b.fit)
-      .map(x => x.idx);
-    
-    for (let i = 0; i < ELITE_SIZE; i++) {
-      nextPopulation.push(population[sortedIndices[i]].map(gene => ({ 
-        ...gene, 
-        roomAssignments: [...gene.roomAssignments], 
-        proctorAssignments: [...gene.proctorAssignments] 
-      })));
-    }
-
-    // Generate rest through selection, crossover, and mutation
-    while (nextPopulation.length < POPULATION_SIZE) {
-      const parent1 = tournamentSelection(population, fitnesses);
-      const parent2 = tournamentSelection(population, fitnesses);
-      
-      const [child1, child2] = crossover(parent1, parent2);
-      
-      nextPopulation.push(mutate(child1));
-      if (nextPopulation.length < POPULATION_SIZE) {
-        nextPopulation.push(mutate(child2));
+    for (let generation = 0; generation < GENERATIONS; generation++) {
+      // Yield to browser every N generations to prevent freezing
+      if (generation % YIELD_EVERY_N_GENERATIONS === 0) {
+        await new Promise(resolve => setTimeout(resolve, 0));
       }
-    }
 
-    population = nextPopulation;
-  }
-
-  console.log(`Evolution complete! Best fitness: ${bestFitness}`);
-
-  // Convert best chromosome to schedule
-  if (!bestChromosome) {
-    alert("Could not find a valid schedule. Please select more exam dates or adjust constraints.");
-    return;
-  }
-
-  const scheduledExams: any[] = [];
-
-  for (const gene of bestChromosome) {
-    const { courseId, date, timeSlot, roomAssignments, proctorAssignments } = gene;
-    const sections = groupedByCourse[courseId];
-
-    // Skip if any assignment is invalid
-    if (roomAssignments.some(r => !r || r === "") || proctorAssignments.some(p => p === -1)) {
-      unscheduledCourses.push(courseId);
-      continue;
-    }
-
-    // Find matching exam period
-    const matchedPeriod = examPeriods.find((p) => {
-      const start = new Date(p.start_date);
-      const end = new Date(p.end_date);
-      return new Date(date) >= start && new Date(date) <= end;
-    });
-
-    if (!matchedPeriod) {
-      unscheduledCourses.push(courseId);
-      continue;
-    }
-
-    // Build exam times
-    const [startHour, startMinute] = timeSlot.split(":").map(Number);
-    const endHour = startHour + Math.floor((startMinute + totalDurationMinutes) / 60);
-    const endMinute = (startMinute + totalDurationMinutes) % 60;
-    const endTime = `${String(endHour).padStart(2, "0")}:${String(endMinute).padStart(2, "0")}`;
-    const startTimestamp = `${date}T${timeSlot}:00Z`;
-    const endTimestamp = `${date}T${endTime}:00Z`;
-
-    // Schedule each section
-    sections.forEach((section: any, idx: number) => {
-      const sectionRoomId = roomAssignments[idx];
-      const proctorId = proctorAssignments[idx];
+      const fitnesses = population.map(calculateFitness);
       
+      const currentBestIdx = fitnesses.indexOf(Math.max(...fitnesses));
+      if (fitnesses[currentBestIdx] > bestFitness) {
+        bestFitness = fitnesses[currentBestIdx];
+        bestChromosome = population[currentBestIdx];
+        
+        // Only log every 20 generations to reduce overhead
+        if (generation % 20 === 0) {
+          console.log(`Generation ${generation}: Best fitness = ${bestFitness}`);
+        }
+      }
+
+      const nextPopulation: Chromosome[] = [];
+
+      const sortedIndices = fitnesses
+        .map((fit, idx) => ({ fit, idx }))
+        .sort((a, b) => b.fit - a.fit)
+        .map(x => x.idx);
+      
+      for (let i = 0; i < ELITE_SIZE; i++) {
+        nextPopulation.push(population[sortedIndices[i]].map(gene => ({ ...gene })));
+      }
+
+      while (nextPopulation.length < POPULATION_SIZE) {
+        const parent1 = tournamentSelection(population, fitnesses);
+        const parent2 = tournamentSelection(population, fitnesses);
+        const [child1, child2] = crossover(parent1, parent2);
+        
+        nextPopulation.push(mutate(child1));
+        if (nextPopulation.length < POPULATION_SIZE) {
+          nextPopulation.push(mutate(child2));
+        }
+      }
+
+      population = nextPopulation;
+    }
+
+    if (!bestChromosome) {
+      alert("Could not find a valid schedule.");
+      return;
+    }
+
+    console.log(`✅ Evolution complete! Final best fitness: ${bestFitness}`);
+
+    // ============================================================================
+    // CONVERT TO SCHEDULE WITH VALIDATION
+    // ============================================================================
+
+    const scheduledExams: any[] = [];
+    const unscheduledSections: string[] = [];
+    
+    // Validation structures
+    const finalRoomTimeRanges = new Map<string, Array<{start: number, end: number, course: string, section: string}>>();
+    const finalProctorTimeRanges = new Map<string, Array<{start: number, end: number, course: string, section: string}>>();
+    const finalCourseDates = new Map<string, Set<string>>();
+
+    for (const gene of bestChromosome) {
+      const section = sectionMap.get(gene.sectionId);
+      if (!section) continue;
+
+      const { date, timeSlot, roomId, proctorId } = gene;
+      const courseId = section.course_id;
+
+      if (!roomId || roomId === "" || proctorId === -1) {
+        unscheduledSections.push(`${section.course_id} - ${section.section_name}`);
+        continue;
+      }
+
+      // VALIDATION: Check course is on one date only
+      if (!finalCourseDates.has(courseId)) {
+        finalCourseDates.set(courseId, new Set());
+      }
+      finalCourseDates.get(courseId)!.add(date);
+      
+      if (finalCourseDates.get(courseId)!.size > 1) {
+        console.warn(`⚠️ Course split across dates: ${courseId} is on ${Array.from(finalCourseDates.get(courseId)!).join(', ')}`);
+        unscheduledSections.push(`${section.course_id} - ${section.section_name} (course split across multiple dates)`);
+        continue;
+      }
+
+      const matchedPeriod = examPeriods.find((p) => {
+        const start = new Date(p.start_date);
+        const end = new Date(p.end_date);
+        return new Date(date) >= start && new Date(date) <= end;
+      });
+
+      if (!matchedPeriod) {
+        unscheduledSections.push(`${section.course_id} - ${section.section_name} (no matching exam period)`);
+        continue;
+      }
+      
+      // Calculate time range
+      const [startHour, startMinute] = timeSlot.split(":").map(Number);
+      const startMinutes = timeToMinutes(timeSlot);
+      const endMinutes = startMinutes + totalDurationMinutes;
+      const endHour = startHour + Math.floor((startMinute + totalDurationMinutes) / 60);
+      const endMinute = (startMinute + totalDurationMinutes) % 60;
+      const endTime = `${String(endHour).padStart(2, "0")}:${String(endMinute).padStart(2, "0")}`;
+      
+      // FINAL VALIDATION: Check for overlaps
+      let hasOverlap = false;
+      
+      // Check room overlaps
+      const roomDateKey = `${date}|${roomId}`;
+      const existingRoomRanges = finalRoomTimeRanges.get(roomDateKey) || [];
+      for (const existing of existingRoomRanges) {
+        if (rangesOverlap(startMinutes, endMinutes, existing.start, existing.end)) {
+          console.warn(`⚠️ Room overlap detected: ${section.course_id} ${section.section_name} overlaps with ${existing.course} ${existing.section} in room ${roomId} on ${date}`);
+          hasOverlap = true;
+          break;
+        }
+      }
+      
+      // CRITICAL: Check proctor overlaps (proctor can only be in one room at a time)
+      const proctorDateKey = `${date}|${proctorId}`;
+      const existingProctorRanges = finalProctorTimeRanges.get(proctorDateKey) || [];
+      for (const existing of existingProctorRanges) {
+        if (rangesOverlap(startMinutes, endMinutes, existing.start, existing.end)) {
+          console.warn(`⚠️ SUPERHERO PROCTOR ALERT: Proctor ${proctorId} would be in multiple rooms at same time!`);
+          console.warn(`   ${section.course_id} ${section.section_name} (${timeSlot}-${endTime}) overlaps with ${existing.course} ${existing.section} on ${date}`);
+          hasOverlap = true;
+          break;
+        }
+      }
+      
+      if (hasOverlap) {
+        unscheduledSections.push(`${section.course_id} - ${section.section_name} (time overlap conflict)`);
+        continue;
+      }
+      
+      // Record the time range
+      if (!finalRoomTimeRanges.has(roomDateKey)) {
+        finalRoomTimeRanges.set(roomDateKey, []);
+      }
+      finalRoomTimeRanges.get(roomDateKey)!.push({
+        start: startMinutes,
+        end: endMinutes,
+        course: section.course_id,
+        section: section.section_name
+      });
+      
+      if (!finalProctorTimeRanges.has(proctorDateKey)) {
+        finalProctorTimeRanges.set(proctorDateKey, []);
+      }
+      finalProctorTimeRanges.get(proctorDateKey)!.push({
+        start: startMinutes,
+        end: endMinutes,
+        course: section.course_id,
+        section: section.section_name
+      });
+
+      const startTimestamp = `${date}T${timeSlot}:00Z`;
+      const endTimestamp = `${date}T${endTime}:00Z`;
+
       const sectionObj = sectionCourses.find(
         (sc) =>
           sc.program_id === section.program_id &&
@@ -840,14 +1334,14 @@ const assignExamSchedules = async () => {
       );
       const instructorId = sectionObj?.user_id ?? null;
 
-      const buildingId = roomToBuildingMap.get(sectionRoomId);
+      const buildingId = roomToBuildingMap.get(roomId);
       const buildingName = buildingId ? buildingMap.get(buildingId) : "Unknown Building";
 
       scheduledExams.push({
         program_id: section.program_id,
         course_id: section.course_id,
         modality_id: section.modality_id,
-        room_id: sectionRoomId,
+        room_id: roomId,
         section_name: section.section_name,
         proctor_id: proctorId,
         examperiod_id: matchedPeriod.examperiod_id,
@@ -865,31 +1359,42 @@ const assignExamSchedules = async () => {
         building_name: `${buildingName} (${buildingId})`,
         instructor_id: instructorId,
       });
-    });
-  }
+    }
 
-  // Warnings
-  if (unscheduledCourses.length) {
-    const courseNames = unscheduledCourses.map(cId => {
-      const course = courses.find(c => c.course_id === cId);
-      return course ? `${cId} (${course.course_name})` : cId;
-    }).join("\n");
-    
-    alert(
-      `Could not schedule ${unscheduledCourses.length} course(s):\n\n${courseNames}\n\nTry: \n- Selecting more exam dates\n- Ensuring enough proctors are available\n- Checking room capacity`
-    );
-  }
+    // ============================================================================
+    // SAVE RESULTS
+    // ============================================================================
 
-  if (!scheduledExams.length) {
-    alert("No valid schedules to save. Please adjust your selection.");
-    return;
-  }
+    if (unscheduledSections.length > 0) {
+      const message = `Could not schedule ${unscheduledSections.length} section(s):\n\n${unscheduledSections.slice(0, 10).join("\n")}${unscheduledSections.length > 10 ? `\n... and ${unscheduledSections.length - 10} more` : ""}\n\nScheduled: ${scheduledExams.length}/${allSections.length} sections`;
+      
+      if (scheduledExams.length === 0) {
+        alert(message + "\n\nNo schedules to save. Please adjust constraints or add more resources.");
+        return;
+      }
+      
+      const proceed = window.confirm(message + "\n\nDo you want to save the partial schedule?");
+      if (!proceed) {
+        return;
+      }
+    }
 
-  // Save to DB
-  const { error } = await supabase.from("tbl_examdetails").insert(scheduledExams);
-  if (error) alert("Error saving schedule: " + error.message);
-  else alert(`${scheduledExams.length} schedules saved successfully!`);
-};
+    if (scheduledExams.length === 0) {
+      alert("No valid schedules to save. Please adjust constraints.");
+      return;
+    }
+
+    console.log(`💾 Saving ${scheduledExams.length} exam schedules...`);
+
+    const { error } = await supabase.from("tbl_examdetails").insert(scheduledExams);
+    if (error) {
+      console.error("Database error:", error);
+      alert("Error saving schedule: " + error.message);
+    } else {
+      toast.success(`Successfully scheduled ${scheduledExams.length}/${allSections.length} sections!`);
+      console.log(`✅ Successfully saved ${scheduledExams.length} exam schedules`);
+    }
+  };
 
   const times = [
     "07:00","07:30","08:00","08:30","09:00","09:30","10:00","10:30","11:00","11:30",
@@ -1228,6 +1733,7 @@ const assignExamSchedules = async () => {
           {loading ? "Generating" : "Generate Schedule"}
         </button>
       </div>
+        <ToastContainer position="top-center" autoClose={3000} />
     </div>
   );
 };
