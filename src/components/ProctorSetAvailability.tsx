@@ -35,6 +35,7 @@ const ProctorSetAvailability: React.FC<ProctorSetAvailabilityProps> = ({ user })
   const [allowedDates, setAllowedDates] = useState<string[]>([]);
   const [_collegeId, setCollegeId] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasApprovedSchedule, setHasApprovedSchedule] = useState(false);
   const [availabilityList, setAvailabilityList] = useState<
     { days: string[]; time_slots: string[]; status: string; remarks?: string }[]
   >([]);
@@ -160,6 +161,49 @@ const ProctorSetAvailability: React.FC<ProctorSetAvailabilityProps> = ({ user })
     const interval = setInterval(fetchUserRoleAndSchedule, 5000);
     return () => clearInterval(interval);
   }, [user.user_id]);
+
+  // Check if there's an approved schedule for the proctor's college
+  useEffect(() => {
+    const checkApprovedSchedule = async () => {
+      if (!_collegeId) {
+        setHasApprovedSchedule(false);
+        return;
+      }
+
+      // Get the college name from college_id
+      const { data: collegeData, error: collegeError } = await supabase
+        .from('tbl_college')
+        .select('college_name')
+        .eq('college_id', _collegeId)
+        .maybeSingle();
+
+      if (collegeError || !collegeData) {
+        console.error('Error fetching college name:', collegeError);
+        setHasApprovedSchedule(false);
+        return;
+      }
+
+      // Check if there's an approved schedule for this college
+      const { data: approvedSchedule, error: scheduleError } = await supabase
+        .from('tbl_scheduleapproval')
+        .select('request_id')
+        .eq('college_name', collegeData.college_name)
+        .eq('status', 'approved')
+        .limit(1);
+
+      if (scheduleError) {
+        console.error('Error checking approved schedule:', scheduleError);
+        setHasApprovedSchedule(false);
+        return;
+      }
+
+      setHasApprovedSchedule(approvedSchedule && approvedSchedule.length > 0);
+    };
+
+    checkApprovedSchedule();
+    const interval = setInterval(checkApprovedSchedule, 5000);
+    return () => clearInterval(interval);
+  }, [_collegeId]);
 
   const daysInMonth = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
   const firstDayOfMonth = (y: number, m: number) => new Date(y, m, 1).getDay();
@@ -442,18 +486,54 @@ const ProctorSetAvailability: React.FC<ProctorSetAvailabilityProps> = ({ user })
         {/* Change Request */}
         <div className="availability-card">
           <div className="card-header-request">Request Change of Availability</div>
-          <div className="subtitle">(only available after the release of exam schedule)</div>
+          <div className="subtitle">
+            {hasApprovedSchedule 
+              ? '(only available after the release of exam schedule)' 
+              : '(waiting for schedule approval from your dean)'}
+          </div>
 
-          <form onSubmit={handleSubmitChangeRequest} className="availability-form">
-            {/* Select Original Schedule (Days) */}
-            <div className="form-group">
-              <label htmlFor="originalDays">Select Schedule Day(s)</label>
-              <Select
-                id="originalDays"
-                value={selectedOriginalDay
-                  .split(',')
-                  .filter(Boolean)
-                  .map(day => ({
+          {!hasApprovedSchedule ? (
+            <div style={{ 
+              textAlign: 'center', 
+              padding: '40px 20px', 
+              color: '#666',
+              fontSize: '14px',
+              border: '1px dashed #ccc',
+              borderRadius: '8px',
+              margin: '20px 0',
+              backgroundColor: '#f9f9f9'
+            }}>
+              <p style={{ marginBottom: '10px', fontWeight: 'bold', color: '#092C4C' }}>
+                Change requests are currently unavailable
+              </p>
+              <p>
+                This feature will be enabled once your college's exam schedule has been approved by the dean.
+              </p>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmitChangeRequest} className="availability-form">
+              {/* Select Original Schedule (Days) */}
+              <div className="form-group">
+                <label htmlFor="originalDays">Select Schedule Day(s)</label>
+                <Select
+                  id="originalDays"
+                  value={selectedOriginalDay
+                    .split(',')
+                    .filter(Boolean)
+                    .map(day => ({
+                      value: day,
+                      label: new Date(day).toLocaleDateString('en-US', {
+                        month: 'long',
+                        day: 'numeric',
+                        year: 'numeric',
+                      }),
+                    }))}
+                  onChange={(selectedOptions) => {
+                    const days = selectedOptions?.map(o => o.value) || [];
+                    setSelectedOriginalDay(days.join(','));
+                    setSelectedOriginalTimeSlot('');
+                  }}
+                  options={availableDays.map(day => ({
                     value: day,
                     label: new Date(day).toLocaleDateString('en-US', {
                       month: 'long',
@@ -461,100 +541,88 @@ const ProctorSetAvailability: React.FC<ProctorSetAvailabilityProps> = ({ user })
                       year: 'numeric',
                     }),
                   }))}
-                onChange={(selectedOptions) => {
-                  const days = selectedOptions?.map(o => o.value) || [];
-                  setSelectedOriginalDay(days.join(','));
-                  setSelectedOriginalTimeSlot('');
-                }}
-                options={availableDays.map(day => ({
-                  value: day,
-                  label: new Date(day).toLocaleDateString('en-US', {
-                    month: 'long',
-                    day: 'numeric',
-                    year: 'numeric',
-                  }),
-                }))}
-                isMulti
-                placeholder="Select one or more days"
-                isDisabled={isSubmitting || availableDays.length === 0}
-                classNamePrefix="react-select"
-                isSearchable
-              />
-            </div>
+                  isMulti
+                  placeholder="Select one or more days"
+                  isDisabled={isSubmitting || availableDays.length === 0}
+                  classNamePrefix="react-select"
+                  isSearchable
+                />
+              </div>
 
-            {/* Select Original Time Slots */}
-            <div className="form-group">
-              <label htmlFor="originalTimeSlots">Select Time Slot(s)</label>
-              <Select
-                id="originalTimeSlots"
-                value={
-                  selectedOriginalTimeSlot
-                    ? selectedOriginalTimeSlot.split(',').map(slot => ({ value: slot, label: slot }))
-                    : []
-                }
-                onChange={(selectedOptions) => {
-                  const slots = selectedOptions?.map(o => o.value) || [];
-                  setSelectedOriginalTimeSlot(slots.join(','));
-                }}
-                options={
-                  selectedOriginalDay
-                    ? Array.from(
-                        new Set(
-                          selectedOriginalDay
-                            .split(',')
-                            .flatMap(day => dayToTimeSlots[day] || [])
-                        )
-                      ).map(slot => ({ value: slot, label: slot }))
-                    : []
-                }
-                placeholder={
-                  selectedOriginalDay ? 'Select one or more time slots' : 'Select days first'
-                }
-                isDisabled={!selectedOriginalDay || isSubmitting}
-                isMulti
-                classNamePrefix="react-select"
-                isSearchable
-              />
-            </div>
+              {/* Select Original Time Slots */}
+              <div className="form-group">
+                <label htmlFor="originalTimeSlots">Select Time Slot(s)</label>
+                <Select
+                  id="originalTimeSlots"
+                  value={
+                    selectedOriginalTimeSlot
+                      ? selectedOriginalTimeSlot.split(',').map(slot => ({ value: slot, label: slot }))
+                      : []
+                  }
+                  onChange={(selectedOptions) => {
+                    const slots = selectedOptions?.map(o => o.value) || [];
+                    setSelectedOriginalTimeSlot(slots.join(','));
+                  }}
+                  options={
+                    selectedOriginalDay
+                      ? Array.from(
+                          new Set(
+                            selectedOriginalDay
+                              .split(',')
+                              .flatMap(day => dayToTimeSlots[day] || [])
+                          )
+                        ).map(slot => ({ value: slot, label: slot }))
+                      : []
+                  }
+                  placeholder={
+                    selectedOriginalDay ? 'Select one or more time slots' : 'Select days first'
+                  }
+                  isDisabled={!selectedOriginalDay || isSubmitting}
+                  isMulti
+                  classNamePrefix="react-select"
+                  isSearchable
+                />
+              </div>
 
-            {/* Change Status */}
-            <div className="form-group">
-              <label htmlFor="changeStatus">New Status</label>
-              <Select
-                id="changeStatus"
-                value={{
-                  value: changeStatus,
-                  label: changeStatus.charAt(0).toUpperCase() + changeStatus.slice(1),
-                }}
-                onChange={(selected) => setChangeStatus(selected?.value || 'unavailable')}
-                options={availabilityOptions.map(opt => ({
-                  value: opt,
-                  label: opt.charAt(0).toUpperCase() + opt.slice(1),
-                }))}
-                isDisabled={isSubmitting}
-                classNamePrefix="react-select"
-                placeholder="Select Status"
-                isSearchable={false}
-              />
-            </div>
+              {/* Change Status */}
+              <div className="form-group">
+                <label htmlFor="changeStatus">New Status</label>
+                <Select
+                  id="changeStatus"
+                  value={{
+                    value: changeStatus,
+                    label: changeStatus.charAt(0).toUpperCase() + changeStatus.slice(1),
+                  }}
+                  onChange={(selected) => setChangeStatus(selected?.value || 'unavailable')}
+                  options={availabilityOptions.map(opt => ({
+                    value: opt,
+                    label: opt.charAt(0).toUpperCase() + opt.slice(1),
+                  }))}
+                  isDisabled={isSubmitting}
+                  classNamePrefix="react-select"
+                  placeholder="Select Status"
+                  isSearchable={false}
+                />
+              </div>
 
-            {/* Reason */}
-            <div className="form-group">
-              <label htmlFor="reason">Reason/s</label>
-              <textarea
-                id="reason"
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                placeholder="Type here..."
-                disabled={isSubmitting}
-              />
-            </div>
+              {/* Reason */}
+              <div className="form-group">
+                <label htmlFor="reason">Reason/s</label>
+                <textarea
+                  id="reason"
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder="Type here..."
+                  disabled={isSubmitting}
+                />
+              </div>
 
-            {/* Submit */}
-            <button type="submit" className="submit-button" disabled={isSubmitting}>
-              {isSubmitting ? 'Submitting...' : 'Submit'}
-            </button>
-          </form>
+              {/* Submit */}
+              <button type="submit" className="submit-button" disabled={isSubmitting}>
+                {isSubmitting ? 'Submitting...' : 'Submit'}
+              </button>
+            </form>
+          )}
         </div>
       </div>
       <ToastContainer position="top-right" autoClose={3000} hideProgressBar />

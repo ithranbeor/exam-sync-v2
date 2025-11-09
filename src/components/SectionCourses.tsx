@@ -39,6 +39,7 @@ interface SectionCourse {
   year_level: string;
   term_id: number;
   user_id?: number;
+  is_night_class: string;
 }
 
 const SectionCourses: React.FC = () => {
@@ -63,6 +64,7 @@ const SectionCourses: React.FC = () => {
     year_level: '',
     term_id: 0,
     user_id: undefined,
+    is_night_class: '',
   });
 
   useEffect(() => { 
@@ -83,7 +85,7 @@ const SectionCourses: React.FC = () => {
     ] = await Promise.all([
       supabase
         .from('tbl_sectioncourse')
-        .select('course_id, program_id, section_name, number_of_students, year_level, term_id, user_id'),
+        .select('course_id, program_id, section_name, number_of_students, year_level, term_id, user_id, is_night_class'),
       supabase
         .from('tbl_course')
         .select('course_id, course_name'),
@@ -153,7 +155,7 @@ const SectionCourses: React.FC = () => {
     if (editMode) {
       const { error } = await supabase
         .from('tbl_sectioncourse')
-        .update({ number_of_students, year_level, term_id, user_id })
+        .update({ number_of_students, year_level, term_id, user_id, is_night_class: newSection.is_night_class })
         .match({ course_id, program_id, section_name, term_id });
 
       if (error) {
@@ -293,6 +295,7 @@ const SectionCourses: React.FC = () => {
             year_level: '',
             term_id: 0,
             user_id: undefined,
+            is_night_class: '',
           });
           setShowModal(true);
         }}>
@@ -332,6 +335,7 @@ const SectionCourses: React.FC = () => {
               <th>Year</th>
               <th>Term</th>
               <th>Instructor</th>
+              <th>Night Class</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -346,6 +350,7 @@ const SectionCourses: React.FC = () => {
                 <td>{sc.year_level}</td>
                 <td>{terms.find(t => t.term_id === sc.term_id)?.term_name || 'N/A'}</td>
                 <td>{courseInstructorsMap[sc.course_id]?.find(u => u.user_id === sc.user_id)?.full_name || 'N/A'}</td>
+                <td>{sc.is_night_class}</td>
                 <td className="action-buttons">
                   <button type='button' className="icon-button edit-button" onClick={() => {
                     setEditMode(true);
@@ -541,6 +546,25 @@ const SectionCourses: React.FC = () => {
                 placeholder="Select Instructor"
                 menuPlacement="top"
               />
+            </div>
+
+            {/* Night Class */}
+            <div className="input-group">
+              <label>Night Class</label>
+              <div>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={newSection.is_night_class === 'YES'}
+                    onChange={(e) =>
+                      setNewSection({
+                        ...newSection,
+                        is_night_class: e.target.checked ? 'YES' : 'NO'
+                      })
+                    }
+                  />
+                </label>
+              </div>
             </div>
 
             {/* Action Buttons */}

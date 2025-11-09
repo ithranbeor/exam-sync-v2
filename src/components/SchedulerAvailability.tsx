@@ -315,7 +315,7 @@ const SchedulerAvailability: React.FC<ProctorSetAvailabilityProps> = ({ user }) 
       .from('tbl_user_role')
       .select('college_id, role_id')
       .eq('user_id', user.user_id);
-    const proctorRole = roles?.find((r) => r.role_id === 5);
+    const proctorRole = roles?.find((r) => r.role_id === 3);
     if (!proctorRole) return;
 
     const { data: periods } = await supabase
@@ -365,7 +365,7 @@ const SchedulerAvailability: React.FC<ProctorSetAvailabilityProps> = ({ user }) 
     if (!day) return;
     const localDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
     const iso = formatDateLocal(localDate);
-    if (!allowedDates.includes(iso)) return;
+    if (allowedDates.length > 0 && !allowedDates.includes(iso)) return;
 
     setSelectedDate(prev => {
       // toggle date selection
